@@ -34,8 +34,8 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_ValidRequest_ReturnsSuccessResult()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest();
-        var user = UserTestDataFactory.CreateUser();
+        var request = GenericTestDataFactory.CreateRegisterRequest();
+        var user = GenericTestDataFactory.CreateUser();
         var token = "test-token";
 
         _mockUserRepository.Setup(x => x.UsernameExistsAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
@@ -67,7 +67,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_InvalidUsername_ReturnsValidationError(string username)
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest(username: username);
+        var request = GenericTestDataFactory.CreateRegisterRequest(username: username);
 
         // Act
         var result = await _authService.RegisterAsync(request);
@@ -87,7 +87,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_InvalidEmail_ReturnsValidationError(string email)
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest(email: email);
+        var request = GenericTestDataFactory.CreateRegisterRequest(email: email);
 
         // Act
         var result = await _authService.RegisterAsync(request);
@@ -108,7 +108,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_InvalidPassword_ReturnsValidationError(string password)
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest(password: password);
+        var request = GenericTestDataFactory.CreateRegisterRequest(password: password);
 
         // Act
         var result = await _authService.RegisterAsync(request);
@@ -123,7 +123,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_ExistingUsername_ReturnsConflictError()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest();
+        var request = GenericTestDataFactory.CreateRegisterRequest();
 
         _mockUserRepository.Setup(x => x.UsernameExistsAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
@@ -141,7 +141,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task RegisterAsync_ExistingEmail_ReturnsConflictError()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateRegisterRequest();
+        var request = GenericTestDataFactory.CreateRegisterRequest();
 
         _mockUserRepository.Setup(x => x.UsernameExistsAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
@@ -161,8 +161,8 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task LoginAsync_ValidCredentials_ReturnsSuccessResult()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateLoginRequest();
-        var user = UserTestDataFactory.CreateUser();
+        var request = GenericTestDataFactory.CreateLoginRequest();
+        var user = GenericTestDataFactory.CreateUser();
         var token = "test-token";
 
         _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
@@ -186,7 +186,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task LoginAsync_NonExistentUser_ReturnsUnauthorizedError()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateLoginRequest();
+        var request = GenericTestDataFactory.CreateLoginRequest();
 
         _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((User?)null);
@@ -204,8 +204,8 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task LoginAsync_InvalidPassword_ReturnsUnauthorizedError()
     {
         // Arrange
-        var request = UserTestDataFactory.CreateLoginRequest();
-        var user = UserTestDataFactory.CreateUser();
+        var request = GenericTestDataFactory.CreateLoginRequest();
+        var user = GenericTestDataFactory.CreateUser();
 
         _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
@@ -228,7 +228,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task LoginAsync_MissingUsername_ReturnsValidationError(string username)
     {
         // Arrange
-        var request = UserTestDataFactory.CreateLoginRequest(username: username);
+        var request = GenericTestDataFactory.CreateLoginRequest(username: username);
 
         // Act
         var result = await _authService.LoginAsync(request);
@@ -246,7 +246,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     public async Task LoginAsync_MissingPassword_ReturnsValidationError(string password)
     {
         // Arrange
-        var request = UserTestDataFactory.CreateLoginRequest(password: password);
+        var request = GenericTestDataFactory.CreateLoginRequest(password: password);
 
         // Act
         var result = await _authService.LoginAsync(request);
@@ -262,7 +262,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     {
         // Arrange
         var userId = 1;
-        var user = UserTestDataFactory.CreateUser(userId);
+        var user = GenericTestDataFactory.CreateUser(userId);
 
         _mockUserRepository.Setup(x => x.GetByIdAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);

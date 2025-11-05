@@ -41,16 +41,19 @@ MySvelteApp.Server.Tests/
 - **RepositoryTestTemplate**: For testing repositories
 - **ServiceTestTemplate**: For testing services
 - **ControllerTestTemplate**: For testing controllers
+- **IntegrationTestTemplate**: For integration tests with WebApplicationFactory
+- **ExternalApiServiceTestTemplate**: For testing external API services
+
+See `TestFixtures/TestTemplates.cs` for complete templates and examples.
 
 ### Test Data Factories
 
 #### GenericTestDataFactory
-- **Purpose**: Creates test data for any entity type
-- **Usage**: `var user = GenericTestDataFactory.CreateUser();`
-
-#### UserTestDataFactory (Legacy)
-- **Purpose**: User-specific test data creation
-- **Usage**: `var request = UserTestDataFactory.CreateLoginRequest();`
+- **Purpose**: Creates test data for any entity type including Users, Auth DTOs, and Pokemon DTOs
+- **Usage**: 
+  - `var user = GenericTestDataFactory.CreateUser();`
+  - `var request = GenericTestDataFactory.CreateLoginRequest();`
+  - `var pokemon = GenericTestDataFactory.CreateRandomPokemonDto();`
 
 ## Naming Conventions
 
@@ -445,7 +448,7 @@ public async Task GetRandomPokemonAsync_ValidResponse_ReturnsPokemon()
 public async Task Get_ValidRequest_ReturnsPokemon()
 {
     // Arrange
-    var expectedPokemon = new RandomPokemonDto { /* ... */ };
+    var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
     _mockService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
         .ReturnsAsync(expectedPokemon);
 
@@ -453,9 +456,9 @@ public async Task Get_ValidRequest_ReturnsPokemon()
     var result = await _controller.Get(CancellationToken.None);
 
     // Assert
-    AssertActionResult<RandomPokemonDto>(result, 200);
-    var okResult = result as OkObjectResult;
-    var pokemon = okResult.Value as RandomPokemonDto;
+    result.Should().BeOfType<ActionResult<RandomPokemonDto>>();
+    var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+    var pokemon = okResult.Value.Should().BeOfType<RandomPokemonDto>().Subject;
     pokemon.Should().BeEquivalentTo(expectedPokemon);
 }
 ```
@@ -467,7 +470,7 @@ public async Task CompleteAuthenticationFlow_WorksCorrectly()
 {
     // Arrange
     var client = _factory.CreateClient();
-    var loginRequest = new { /* ... */ };
+    var loginRequest = GenericTestDataFactory.CreateLoginRequest();
 
     // Act
     var loginResponse = await client.PostAsJsonAsync("/Auth/login", loginRequest);
@@ -483,3 +486,43 @@ public async Task CompleteAuthenticationFlow_WorksCorrectly()
 ```
 
 This comprehensive testing architecture provides a solid foundation for testing any backend features while maintaining consistency and quality across the entire test suite.
+
+## Adding New Features
+
+### Quick Setup Process
+1. **Check the FEATURE_SETUP_GUIDE.md** - Step-by-step guide for adding tests
+2. **Use the Templates** - Copy from `TestFixtures/TestTemplates.cs` for quick setup
+3. **Follow Naming Patterns** - Maintain consistency with existing tests
+4. **Use GenericTestDataFactory** - Add your entity/DTO factory methods
+
+### Templates Available
+- `ServiceTestTemplate<TService>` - Service layer tests
+- `ControllerTestTemplate<TController>` - Controller tests  
+- `RepositoryTestTemplate<TRepository, TEntity, TId>` - Repository tests
+- `IntegrationTestTemplate` - Integration tests
+- `ExternalApiServiceTestTemplate` - External API tests
+
+### Example: Adding a New Feature
+```csharp
+// 1. Add to GenericTestDataFactory
+public static YourEntity CreateYourEntity(int id = 1, string name = "test")
+{
+    return new YourEntity { Id = id, Name = name };
+}
+
+// 2. Create service test
+public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
+{
+    protected override IYourFeatureService CreateService() => 
+        new YourFeatureService(MockRepo.Object);
+    
+    [Fact]
+    public async Task YourMethod_ValidInput_ReturnsExpected() { /* implementation */ }
+}
+```
+
+### Benefits of This Architecture
+- **Consistent Patterns**: All features follow the same testing approach
+- **Quick Setup**: Templates reduce boilerplate code significantly
+- **Easy Maintenance**: Changes to patterns affect all features uniformly
+- **Extensible**: New patterns can be added and reused across features
