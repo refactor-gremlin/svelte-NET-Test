@@ -15,10 +15,17 @@ public class PasswordHasher : IPasswordHasher
 
     public bool VerifyPassword(string password, string hash, string salt)
     {
-        var saltBytes = Convert.FromBase64String(salt);
-        using var hmac = new HMACSHA512(saltBytes);
-        var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-        var storedHash = Convert.FromBase64String(hash);
-        return computedHash.SequenceEqual(storedHash);
+        try
+        {
+            var saltBytes = Convert.FromBase64String(salt);
+            using var hmac = new HMACSHA512(saltBytes);
+            var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+            var storedHash = Convert.FromBase64String(hash);
+            return computedHash.SequenceEqual(storedHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }

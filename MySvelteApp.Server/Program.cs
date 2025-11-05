@@ -20,60 +20,64 @@ using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 
-var builder = WebApplication.CreateBuilder(args);
-
-const string WebsiteClientOrigin = "website_client";
-
-builder.Services.AddCors(options =>
+public class Program
 {
-    options.AddPolicy(WebsiteClientOrigin, policy =>
+    public static void Main(string[] args)
     {
-        policy
-            .WithOrigins("http://localhost:5173", "http://localhost:3000", "http://web:3000", "http://localhost:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
+        var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+        const string WebsiteClientOrigin = "website_client";
+
+        builder.Services.AddCors(options =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "your-issuer",
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "your-audience",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "your-secret-key-here"))
-        };
-    });
+            options.AddPolicy(WebsiteClientOrigin, policy =>
+            {
+                policy
+                    .WithOrigins("http://localhost:5173", "http://localhost:3000", "http://web:3000", "http://localhost:5173")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            });
+        });
 
-builder.Services.AddAuthorizationBuilder()
-    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build());
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "your-issuer",
+                    ValidAudience = builder.Configuration["Jwt:Audience"] ?? "your-audience",
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "your-secret-key-here"))
+                };
+            });
 
-builder.Services.AddControllers();
+        builder.Services.AddAuthorizationBuilder()
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build());
 
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "MySvelteApp.Server", Version = "v1" });
+        builder.Services.AddControllers();
 
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = ParameterLocation.Header,
-        Description = "Enter 'Bearer <token>'"
-    });
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new OpenApiInfo { Title = "MySvelteApp.Server", Version = "v1" });
 
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
+            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Enter 'Bearer <token>'"
+            });
+
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
         {
             new OpenApiSecurityScheme
             {
@@ -85,66 +89,68 @@ builder.Services.AddSwaggerGen(c =>
             },
             Array.Empty<string>()
         }
-    });
-});
-
-var promtailUrl = builder.Configuration["LOKI_PUSH_URL"] ?? "http://localhost:3101/loki/api/v1/push";
-var apiServiceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "mysvelteapp-api";
-var environmentName = builder.Environment.EnvironmentName ?? "Development";
-
-builder.Host.UseSerilog((_, _, configuration) =>
-{
-    configuration
-        .MinimumLevel.Information()
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("service", apiServiceName)
-        .Enrich.WithProperty("env", environmentName.ToLowerInvariant())
-        .WriteTo.Console()
-        .WriteTo.GrafanaLoki(promtailUrl);
-});
-
-var serviceName = apiServiceName;
-var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4318/v1/traces";
-var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "http/protobuf";
-
-builder.Services.AddOpenTelemetry().WithTracing(tracing =>
-{
-    tracing
-        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
-        .AddAspNetCoreInstrumentation(options => { options.RecordException = true; })
-        .AddHttpClientInstrumentation()
-        .AddOtlpExporter(options =>
-        {
-            options.Endpoint = new Uri(otlpEndpoint);
-            options.Protocol = string.Equals(otlpProtocol, "grpc", StringComparison.OrdinalIgnoreCase)
-                ? OtlpExportProtocol.Grpc
-                : OtlpExportProtocol.HttpProtobuf;
+            });
         });
-});
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseInMemoryDatabase("MySvelteAppDb"));
+        var promtailUrl = builder.Configuration["LOKI_PUSH_URL"] ?? "http://localhost:3101/loki/api/v1/push";
+        var apiServiceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "mysvelteapp-api";
+        var environmentName = builder.Environment.EnvironmentName ?? "Development";
 
-builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddHttpClient<IRandomPokemonService, PokeApiRandomPokemonService>();
+        builder.Host.UseSerilog((_, _, configuration) =>
+        {
+            configuration
+                .MinimumLevel.Information()
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("service", apiServiceName)
+                .Enrich.WithProperty("env", environmentName.ToLowerInvariant())
+                .WriteTo.Console()
+                .WriteTo.GrafanaLoki(promtailUrl);
+        });
+
+        var serviceName = apiServiceName;
+        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4318/v1/traces";
+        var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "http/protobuf";
+
+        builder.Services.AddOpenTelemetry().WithTracing(tracing =>
+        {
+            tracing
+                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
+                .AddAspNetCoreInstrumentation(options => { options.RecordException = true; })
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter(options =>
+                {
+                    options.Endpoint = new Uri(otlpEndpoint);
+                    options.Protocol = string.Equals(otlpProtocol, "grpc", StringComparison.OrdinalIgnoreCase)
+                        ? OtlpExportProtocol.Grpc
+                        : OtlpExportProtocol.HttpProtobuf;
+                });
+        });
+
+        builder.Services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase("MySvelteAppDb"));
+
+        builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+        builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IAuthService, AuthService>();
+        builder.Services.AddHttpClient<IRandomPokemonService, PokeApiRandomPokemonService>();
 
 
-var app = builder.Build();
+        var app = builder.Build();
 
-app.UseCors(WebsiteClientOrigin);
+        app.UseCors(WebsiteClientOrigin);
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
+
+        app.UseHttpsRedirection();
+        app.UseSerilogRequestLogging();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapControllers();
+        app.Run();
+    }
 }
-
-app.UseHttpsRedirection();
-app.UseSerilogRequestLogging();
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapControllers();
-app.Run();
