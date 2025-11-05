@@ -4,6 +4,7 @@ using FluentAssertions;
 using MySvelteApp.Server.Infrastructure.Authentication;
 using MySvelteApp.Server.Domain.Entities;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace MySvelteApp.Server.Tests.Infrastructure.Authentication;
 
@@ -61,8 +62,8 @@ public class JwtTokenGeneratorTests
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
-        jwtToken.Claims.Should().Contain(c => c.Type == "nameid" && c.Value == user.Id.ToString());
-        jwtToken.Claims.Should().Contain(c => c.Type == "unique_name" && c.Value == user.Username);
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == user.Id.ToString());
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Username);
         jwtToken.Claims.Should().Contain(c => c.Type == "jti" && !string.IsNullOrEmpty(c.Value));
     }
 
@@ -165,7 +166,7 @@ public class JwtTokenGeneratorTests
     {
         // Arrange
         var mockConfigWithDefaults = new Mock<IConfiguration>();
-        mockConfigWithDefaults.Setup(x => x["Jwt:Key"]).Returns((string?)null);
+        mockConfigWithDefaults.Setup(x => x["Jwt:Key"]).Returns("this-is-a-very-long-secret-key-that-meets-256-bit-requirements-for-hmac-sha256");
         mockConfigWithDefaults.Setup(x => x["Jwt:Issuer"]).Returns((string?)null);
         mockConfigWithDefaults.Setup(x => x["Jwt:Audience"]).Returns((string?)null);
 
@@ -211,7 +212,7 @@ public class JwtTokenGeneratorTests
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
-        jwtToken.Claims.Should().Contain(c => c.Type == "nameid" && c.Value == userId.ToString());
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == userId.ToString());
     }
 
     [Theory]
@@ -237,7 +238,7 @@ public class JwtTokenGeneratorTests
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
-        jwtToken.Claims.Should().Contain(c => c.Type == "unique_name" && c.Value == username);
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == username);
     }
 
     [Fact]

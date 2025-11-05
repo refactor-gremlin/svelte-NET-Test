@@ -130,7 +130,3 @@ const complexCalc = $derived.by(() => {
 - `$derived.by` allows for more complex logic without performance penalty
 - Always prefer readability over micro-optimizations
 - The performance difference is usually negligible for most use cases
-
-## Related Rules
-- See [Svelte 5 Runes Overview](mdc:_oldclinerules) for general Svelte 5 guidance
-- See [project-coding-standards.mdc](mdc:clinerules) for additional project standards

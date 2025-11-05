@@ -209,6 +209,14 @@ const items = $derived(data.items.map(item => ({ ...item, computed: item.value *
 </script>
 ```
 
-## Related Rules
-- See [svelte-derived-runes.mdc](mdc:svelte-derived-runes.mdc) for `$derived` vs `$derived.by` guidance
-- See [project-coding-standards.mdc](mdc:clinerules) for additional project standards
+### Avoid Prop drilling
+```javascript
+// ✅ Good: Avoid prop drilling
+<PackageScanner {packages} onSelect={handleSelect} />
+<PackageTable {packages} selectedId={selectedId} />
+<PackageActions {selectedPackage} onAction={handleAction} />
+
+// ❌ Bad: Prop drilling
+<PackageManager {packages} selectedId={selectedId} onSelect={handleSelect} onAction={handleAction} />
+```
+If you need to pass a lot of props, consider using a context or a store.

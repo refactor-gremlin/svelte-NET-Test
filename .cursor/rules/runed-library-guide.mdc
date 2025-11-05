@@ -640,9 +640,3 @@ $effect(() => {
   }
 });
 ```
-
-## Related Rules
-
-- See [SvelteKit Remote Functions](mdc:sveltekit-remote-functions.mdc) for data fetching patterns
-- See [Svelte 5 Best Practices](mdc:svelte-5-best-practices.mdc) for general Svelte 5 patterns
-- See [OOP State Management Pattern](mdc:oop-state-management-pattern.mdc) for state management patterns

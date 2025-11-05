@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="System.Threading.Tasks" />
   </ItemGroup>
 
   <ItemGroup>

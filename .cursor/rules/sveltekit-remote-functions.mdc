@@ -204,8 +204,3 @@ Prefer optimistic updates over refresh to prevent scroll jumps:
 ### Optimistic Updates
 - ✅ Ensure query calls match exactly in `#await` and `.withOverride()`
 - ❌ Don't call context refresh after optimistic updates
-
-## Related Rules
-- See [freight-management-patterns.mdc](mdc:freight-management-patterns.mdc) for freight-specific patterns
-- See [project-coding-standards.mdc](mdc:project-coding-standards.mdc) for general coding standards
-- See [svelte-5-best-practices.mdc](mdc:svelte-5-best-practices.mdc) for Svelte 5 patterns

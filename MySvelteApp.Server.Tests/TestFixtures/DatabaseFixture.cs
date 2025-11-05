@@ -25,29 +25,53 @@ public class DatabaseFixture : IDisposable
         DbContext.Dispose();
     }
 
-    public async Task<User> CreateTestUserAsync(string username = "testuser", string email = "test@example.com")
+    // Generic database management methods
+    public async Task AddEntityAsync<T>(T entity) where T : class
     {
-        var user = new User
-        {
-            Username = username,
-            Email = email,
-            PasswordHash = "testhash",
-            PasswordSalt = "testsalt"
-        };
-
-        DbContext.Users.Add(user);
+        DbContext.Set<T>().Add(entity);
         await DbContext.SaveChangesAsync();
-
-        return user;
     }
 
-    public async Task<List<User>> CreateMultipleTestUsersAsync(int count)
+    public async Task AddEntitiesAsync<T>(params T[] entities) where T : class
     {
-        var users = new List<User>();
-        for (int i = 1; i <= count; i++)
+        DbContext.Set<T>().AddRange(entities);
+        await DbContext.SaveChangesAsync();
+    }
+
+    public async Task<T?> GetEntityAsync<T>(int id) where T : class
+    {
+        return await DbContext.Set<T>().FindAsync(id);
+    }
+
+    public async Task<List<T>> GetAllEntitiesAsync<T>() where T : class
+    {
+        return await DbContext.Set<T>().ToListAsync();
+    }
+
+    public async Task<int> CountEntitiesAsync<T>() where T : class
+    {
+        return await DbContext.Set<T>().CountAsync();
+    }
+
+    public async Task ClearEntitiesAsync<T>() where T : class
+    {
+        DbContext.Set<T>().RemoveRange(DbContext.Set<T>());
+        await DbContext.SaveChangesAsync();
+    }
+
+    public async Task ClearAllEntitiesAsync()
+    {
+        var entities = DbContext.Model.GetEntityTypes().Select(e => e.ClrType);
+        foreach (var entityType in entities)
         {
-            users.Add(await CreateTestUserAsync($"user{i}", $"user{i}@example.com"));
+            var method = typeof(DatabaseFixture)
+                .GetMethod(nameof(ClearEntitiesAsync))
+                ?.MakeGenericMethod(entityType);
+            
+            if (method != null)
+            {
+                await (Task)method.Invoke(this, null)!;
+            }
         }
-        return users;
     }
 }
