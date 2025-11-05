@@ -30,6 +30,16 @@ export const AuthSuccessResponseSchema = {
     additionalProperties: false
 } as const;
 
+export const CurrentUserResponseSchema = {
+    type: 'object',
+    properties: {
+        user: {
+            '$ref': '#/components/schemas/UserDto'
+        }
+    },
+    additionalProperties: false
+} as const;
+
 export const LoginRequestSchema = {
     type: 'object',
     properties: {
@@ -83,42 +93,18 @@ export const RegisterRequestSchema = {
     additionalProperties: false
 } as const;
 
-export const WeatherForecastDtoSchema = {
+export const UserDtoSchema = {
     type: 'object',
     properties: {
-        date: {
-            type: 'string',
-            format: 'date'
-        },
-        temperatureC: {
+        id: {
             type: 'integer',
             format: 'int32'
         },
-        summary: {
+        username: {
             type: 'string',
             nullable: true
         },
-        temperatureF: {
-            type: 'integer',
-            format: 'int32',
-            readOnly: true
-        }
-    },
-    additionalProperties: false
-} as const;
-
-export const WeatherForecastDtoWritableSchema = {
-    type: 'object',
-    properties: {
-        date: {
-            type: 'string',
-            format: 'date'
-        },
-        temperatureC: {
-            type: 'integer',
-            format: 'int32'
-        },
-        summary: {
+        email: {
             type: 'string',
             nullable: true
         }

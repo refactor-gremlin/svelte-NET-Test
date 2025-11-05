@@ -147,6 +147,25 @@ public class AuthService : IAuthService
         return null;
     }
 
+    public async Task<CurrentUserResponse?> GetCurrentUserAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        return new CurrentUserResponse
+        {
+            User = new UserDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email
+            }
+        };
+    }
+
     private static (string Message, AuthErrorType Type)? ValidateLoginRequest(LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Username))

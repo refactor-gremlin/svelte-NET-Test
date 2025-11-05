@@ -1,7 +1,0 @@
-id: svelte-await-then
-message: "Svelte {#await} with {:then}"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '\{#await\s+[^}]+\}.*\{:then\s+[^}]+\}'

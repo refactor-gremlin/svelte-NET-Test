@@ -1,6 +1,0 @@
-id: svelte-avoid-reactive-label
-message: "Avoid reactive labels ($:) in Svelte 5; use $effect(() => { ... })"
-severity: error
-language: svelte
-rule:
-  pattern: "$: $STMT"

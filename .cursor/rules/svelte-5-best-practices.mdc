@@ -1,0 +1,214 @@
+---
+description: Svelte 5 best practices and patterns
+alwaysApply: false
+---
+# Svelte 5 Best Practices
+
+## Always Use Runes
+```javascript
+// ✅ DO: Use Svelte 5 runes
+let count = $state(0);
+const doubled = $derived(count * 2);
+
+// ❌ DON'T: Use legacy reactive statements
+$: doubled = count * 2;
+```
+
+## State Management Patterns
+
+### Use `$state` for Local Component State
+```javascript
+// ✅ Good: Local component state
+let isLoading = $state(false);
+let selectedItem = $state(null);
+let searchQuery = $state('');
+
+// ❌ Avoid: Overusing stores for local state
+// Use stores only for cross-component state
+```
+
+### Use `$state.raw` When Needed
+```javascript
+// ✅ Use $state.raw for non-reactive objects
+let person = $state.raw({
+  name: 'Alice',
+  age: 30
+});
+
+// ❌ Don't use $state.raw unnecessarily
+let count = $state.raw(0); // Unnecessary, just use $state(0)
+```
+
+## Event Handling
+
+### Use Modern Event Handlers
+```javascript
+// ✅ Svelte 5: Direct property binding
+<button onclick={handleClick}>Click me</button>
+
+// ❌ Svelte 4: Old event directive
+<button on:click={handleClick}>Click me</button>
+```
+
+### Handle Multiple Event Handlers Properly
+```javascript
+// ✅ Combine multiple handlers correctly
+<button onclick={(e) => {
+  handleFirst(e);
+  handleSecond(e);
+}}>
+  Click me
+</button>
+```
+
+## Props and Components
+
+### Use `$props` for Component Props
+```javascript
+// ✅ Svelte 5 props
+let { title, disabled = false, children } = $props();
+
+// ❌ Svelte 4 export syntax
+export let title;
+export let disabled = false;
+```
+
+### Use `$bindable` for Two-Way Binding
+```javascript
+// ✅ For two-way bound props
+let { value = $bindable() } = $props();
+```
+
+## Effects and Lifecycle
+
+### Use `$effect` Instead of `onMount`
+```javascript
+// ✅ Svelte 5 effect
+$effect(() => {
+  if (data) {
+    processData(data);
+  }
+});
+
+// ❌ Svelte 4 onMount
+onMount(() => {
+  processData(data);
+});
+```
+
+### Use `$effect.pre` for Pre-DOM Updates
+```javascript
+// ✅ Pre-DOM effect for auto-scrolling
+$effect.pre(() => {
+  if (messages.length > 0) {
+    scrollToBottom();
+  }
+});
+```
+
+## Performance Tips
+
+### Avoid Unnecessary Re-renders
+```javascript
+// ✅ Good: Stable references
+const items = $derived.by(() => {
+  return data.items.map(item => ({ ...item, computed: item.value * 2 }));
+});
+
+// ❌ Bad: New array every time
+const items = $derived(data.items.map(item => ({ ...item, computed: item.value * 2 })));
+```
+
+### Use Proper Key Expressions
+```javascript
+<!-- ✅ Use stable, unique keys -->
+{#each items as item (item.id)}
+  <div>{item.name}</div>
+{/each}
+
+<!-- ❌ Avoid index as key when possible -->
+{#each items as item, index (index)}
+  <div>{item.name}</div>
+{/each}
+```
+
+### Use `@const` Wisely in Templates
+```javascript
+<!-- ✅ GOOD: Use @const for multi-use variables -->
+{@const isSelected = value === vracht.inkoop_vracht_nr}
+{@const safeData = Array.isArray(data) ? data : []}
+{@const computedValue = expensiveCalculation()}
+
+<!-- ❌ BAD: Don't use @const for single-use variables -->
+{@const rowClass = getRowClass(item)}
+<TableRow class={`hover:bg-muted/50 ${rowClass}`}>
+
+<!-- ✅ BETTER: Inline single-use variables -->
+<TableRow class={`hover:bg-muted/50 ${getRowClass(item)}`}>
+```
+
+**Rule of thumb:** Only use `@const` if the variable is used 2+ times or represents a complex computation! 🎯
+
+## Code Organization
+
+### Keep Components Small and Focused
+```javascript
+// ✅ Single responsibility components
+<PackageScanner {packages} onSelect={handleSelect} />
+<PackageTable {packages} selectedId={selectedId} />
+<PackageActions {selectedPackage} onAction={handleAction} />
+
+// ❌ Monolithic components
+<PackageManager /> <!-- Does everything -->
+```
+
+### Use Snippets for Reusable Markup
+```javascript
+<!-- ✅ Use snippets for reusable templates -->
+{#snippet packageRow(package)}
+  <tr class="border-b">
+    <td>{package.id}</td>
+    <td>{package.name}</td>
+    <td>{package.status}</td>
+  </tr>
+{/snippet}
+
+{#each packages as package}
+  {@render packageRow(package)}
+{/each}
+```
+
+## TypeScript Integration
+
+### Use Proper TypeScript in Svelte
+```typescript
+<script lang="ts">
+  let count: number = $state(0);
+  let items: Package[] = $state([]);
+
+  const selectedItem = $derived.by((): Package | null => {
+    return items.find(item => item.id === selectedId) ?? null;
+  });
+
+  function handleSelect(id: string): void {
+    selectedId = id;
+  }
+</script>
+```
+
+### Type Component Props
+```typescript
+<script lang="ts">
+  interface Props {
+    packages: Package[];
+    selectedId?: string;
+    onSelect: (id: string) => void;
+  }
+
+  let { packages, selectedId, onSelect }: Props = $props();
+</script>
+```
+
+## Related Rules
+- See [svelte-derived-runes.mdc](mdc:svelte-derived-runes.mdc) for `$derived` vs `$derived.by` guidance
+- See [project-coding-standards.mdc](mdc:clinerules) for additional project standards

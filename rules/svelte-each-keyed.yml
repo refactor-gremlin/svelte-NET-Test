@@ -1,7 +1,0 @@
-id: svelte-each-keyed
-message: "Svelte {#each} keyed"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '\{#each\s+[^}]+as\s+[^}]+\s*\([^)]+\)\}'

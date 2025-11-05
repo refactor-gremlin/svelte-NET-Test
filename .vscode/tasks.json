@@ -2,7 +2,23 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "build: backend",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/MySvelteApp.Server/MySvelteApp.Server.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build: solution",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -14,29 +30,73 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "compose: start observability",
+            "label": "run: backend",
+            "command": "dotnet",
             "type": "process",
-            "command": "docker",
             "args": [
-                "compose",
-                "-f",
-                "${workspaceFolder}/observability.compose.yml",
-                "up",
-                "-d"
+                "run",
+                "--project",
+                "${workspaceFolder}/MySvelteApp.Server/MySvelteApp.Server.csproj"
             ],
-            "problemMatcher": []
+            "problemMatcher": "$msCompile",
+            "group": "build"
         },
         {
-            "label": "compose: stop observability",
-            "type": "process",
-            "command": "docker",
+            "label": "run: frontend",
+            "type": "shell",
+            "command": "npm",
             "args": [
-                "compose",
-                "-f",
-                "${workspaceFolder}/observability.compose.yml",
-                "stop"
+                "run",
+                "dev"
             ],
-            "problemMatcher": []
+            "options": {
+                "cwd": "${workspaceFolder}/MySvelteApp.Client"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "generate: api",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "generate"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "install: frontend",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "install"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/MySvelteApp.Client"
+            },
+            "group": "build"
+        },
+        {
+            "label": "generate: api-classes",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "generate-api-classes"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/MySvelteApp.Client"
+            },
+            "group": "build"
         }
     ]
 }

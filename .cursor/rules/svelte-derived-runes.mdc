@@ -1,0 +1,136 @@
+---
+description: Svelte 5 Runes - When to use $derived vs $derived.by
+alwaysApply: false
+---
+# Svelte 5 Runes: `$derived` vs `$derived.by` Rules
+
+## When to Use `$derived`
+Use `$derived` for simple, single-expression reactive computations that fit on one line:
+
+- **Simple expressions**: `count * 2`, `!!value`, `array.length > 0`
+- **Single operations** on state variables
+- **Mathematical operations**: `a + b`, `Math.max(x, y)`
+- **Boolean checks**: `count > 10`, `!!value`, `array.length === 0`
+- **Property access**: `data?.user?.name ?? 'default'`
+- **Type conversions**: `String(value)`, `Number(input)`
+
+### Good `$derived` Examples:
+```javascript
+// ✅ Simple boolean checks
+const hasVrachtInfo = $derived(!!(vrachtInfo && vrachtInfo.length > 0));
+const isAuthenticated = $derived(data?.user?.isAuthenticated ?? false);
+
+// ✅ Property access with fallbacks
+const username = $derived(data?.user?.username ?? 'User');
+const pathname = $derived(page.url.pathname);
+
+// ✅ Mathematical operations
+const doubled = $derived(count * 2);
+const totaal = $derived(this.pakketten.length);
+
+// ✅ Boolean logic
+const isVisible = $derived(showOverlay && !isLoading);
+const canStopOrProcess = $derived(!!activeGebruiker && !!selectedVrachtNr && !uiState.isLoading);
+```
+
+## When to Use `$derived.by`
+Use `$derived.by` for complex computations that require multiple statements, loops, or conditional logic:
+
+- **Multiple statements** are needed
+- **Loops or iterations** are required
+- **Conditional logic** with if/else blocks
+- **Complex calculations** involving multiple variables
+- **Function calls** or method invocations
+- **Error handling** or try/catch blocks
+
+### Good `$derived.by` Examples:
+```javascript
+// ✅ Complex conditional logic
+const headerText = $derived.by(() => {
+  if (!vrachtInfo || vrachtInfo.length === 0) return 'Geen informatie beschikbaar';
+
+  const first = vrachtInfo[0];
+  return `Vracht ${first.vracht_nr} - ${first.bestemming}`;
+});
+
+// ✅ Loops and iterations
+const total = $derived.by(() => {
+  let sum = 0;
+  for (const n of numbers) {
+    sum += n;
+  }
+  return sum;
+});
+
+// ✅ Multiple state access with logic
+const selectedLocationDetails = $derived.by(() => {
+  const loc = selectedLocation();
+  if (!loc) return null;
+
+  return {
+    name: loc.naam,
+    code: loc.code,
+    coordinates: [loc.longitude, loc.latitude]
+  };
+});
+
+// ✅ Complex processing with multiple steps
+const formattedVrachtInfo = $derived.by(() => {
+  if (!vrachtInfo?.length) return [];
+
+  return vrachtInfo.map(info => ({
+    ...info,
+    formattedDate: new Date(info.date).toLocaleDateString('nl-NL'),
+    statusText: getStatusText(info.status)
+  }));
+});
+```
+
+## Quick Decision Rules
+1. **Can it fit in a single expression?** → `$derived`
+2. **Does it need loops, conditionals, or multiple statements?** → `$derived.by`
+3. **Does it access multiple state variables with logic?** → `$derived.by`
+4. **Does it involve function calls or complex operations?** → `$derived.by`
+
+## Common Mistakes to Avoid
+```javascript
+// ❌ DON'T: Force complex logic into $derived
+const result = $derived(
+  items.length > 0 ? items.reduce((sum, item) => sum + item.value, 0) : 0
+);
+
+// ✅ DO: Use $derived.by for complex logic
+const result = $derived.by(() => {
+  if (items.length === 0) return 0;
+
+  let sum = 0;
+  for (const item of items) {
+    if (item.active) {
+      sum += item.value;
+    }
+  }
+  return sum;
+});
+
+// ❌ DON'T: Multiple statements crammed into $derived
+const complexCalc = $derived(() => {
+  const a = x + y; const b = a * 2; return b > 10 ? b : 0;
+});
+
+// ✅ DO: Use $derived.by for multiple statements
+const complexCalc = $derived.by(() => {
+  const a = x + y;
+  const b = a * 2;
+  return b > 10 ? b : 0;
+});
+```
+
+## Performance Considerations
+- `$derived` is slightly more performant for simple expressions
+- `$derived.by` allows for more complex logic without performance penalty
+- Always prefer readability over micro-optimizations
+- The performance difference is usually negligible for most use cases
+
+## Related Rules
+- See [Svelte 5 Runes Overview](mdc:_oldclinerules) for general Svelte 5 guidance
+- See [project-coding-standards.mdc](mdc:clinerules) for additional project standards

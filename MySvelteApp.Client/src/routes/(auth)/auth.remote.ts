@@ -1,7 +1,7 @@
 import { form, command, query } from '$app/server';
 import { getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { postAuthLogin, postAuthRegister, getTestAuth } from '$api/schema/sdk.gen';
+import { postAuthLogin, postAuthRegister, getTestAuth, getAuthMe } from '$api/schema/sdk.gen';
 import { zAuthErrorResponse } from '$api/schema/zod.gen';
 import { z } from 'zod';
 
@@ -121,25 +121,31 @@ export const getCurrentUser = query(async () => {
 		error(401, 'Not authenticated');
 	}
 
-	// Validate token with backend using generated TestAuth client
+	// Get current user from backend using the new getAuthMe endpoint
 	try {
-		const response = await getTestAuth({
+		const response = await getAuthMe({
 			headers: {
 				'Authorization': `Bearer ${token}`
 			},
 			throwOnError: true as const
 		});
 
-		// Return a mock user since the test auth doesn't return user details
+		const result = response.data;
+		
+		// Return the actual user data from the backend
 		return {
-			id: 'user123',
-			email: 'user@example.com',
-			name: 'Test User',
+			id: result.user?.id?.toString() || '',
+			email: result.user?.email || '',
+			name: result.user?.username || '',
 			token
 		};
 	} catch (err) {
-		console.error('Token validation error:', err);
-		error(401, 'Authentication failed');
+		console.error('Get current user error:', err);
+		const parsed = zAuthErrorResponse.safeParse(err);
+		const message = parsed.success && parsed.data.message
+			? parsed.data.message
+			: 'Authentication failed';
+		error(401, message);
 	}
 });
 

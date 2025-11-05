@@ -1,0 +1,211 @@
+---
+description: Comprehensive guide for SvelteKit remote functions — data loading, form enhancement, optimistic updates, and scroll stability
+alwaysApply: false
+---
+# SvelteKit Remote Functions: Complete Guide
+
+## 1. Remote Function Types
+
+### Query Functions - For data fetching:
+```typescript
+export const getPakketten = query(async (vrachtNr: number) => {
+  const pakketten = await db.getPakkettenByVracht(vrachtNr);
+  return pakketten;
+});
+```
+
+### Form Functions - For HTML form submissions:
+```typescript
+export const scanPakketForm = form(
+  z.object({
+    pakketIdentificatieNr: z.string().min(1),
+    vrachtNr: z.string().min(1),
+  }),
+  async ({ pakketIdentificatieNr, vrachtNr }) => {
+    await savePakket(pakketIdentificatieNr, parseInt(vrachtNr));
+    return { success: true };
+  }
+);
+```
+
+### Command Functions - For direct function calls:
+```typescript
+export const processPakket = command(
+  z.object({ pakketId: z.string(), status: z.number() }),
+  async ({ pakketId, status }) => {
+    await updatePakketStatus(pakketId, status);
+  }
+);
+```
+
+### Prerender Functions - For build-time data:
+```typescript
+export const getStaticConfig = prerender(async () => {
+  return await loadStaticConfig();
+});
+```
+
+## 2. Data Loading Pattern
+
+**CRITICAL**: Always use direct `#await` calls in templates. **NEVER** wrap query calls in `$derived.by()` or access `.current` properties.
+
+### Pattern: Separate Await Blocks
+
+Always use separate `{#await}`, `{:then}`, and `{:catch}` blocks. Never use `{#await promise then value}` shorthand or `{#snippet pending()}` blocks.
+
+```svelte
+{#if condition}
+  <svelte:boundary>
+    {#await getData({ vrachtNr })}
+      <Skeleton />
+    {:then data}
+      <Content data={data} />
+    {:catch error}
+      <ErrorDisplay {error} />
+    {/await}
+  </svelte:boundary>
+{/if}
+```
+
+**Rules:**
+- Place `svelte:boundary` **inside** conditionals, not wrapping them
+- Always provide explicit pending states in `{#await}` blocks
+- Render directly from awaited data, avoid copying into `$state`
+- Never use `{#snippet pending()}` blocks
+
+### ❌ INCORRECT Patterns
+
+```svelte
+<!-- ❌ Don't wrap in $derived.by() -->
+<script>
+  const data = $derived.by(() => getPakketten({ vrachtNr }));
+</script>
+
+<!-- ❌ Don't access .current -->
+const data = query.current;
+
+<!-- ❌ Don't use shorthand -->
+{#await getData() then data}<Content />{/await}
+
+<!-- ❌ Don't use boundary snippets -->
+<svelte:boundary>
+  {#snippet pending()}<Skeleton />{/snippet}
+</svelte:boundary>
+```
+
+## 3. Form Enhancement
+
+Remote function forms pass data as typed JavaScript objects, not FormData:
+
+```svelte
+<form {...scanPakketForm.enhance(async ({ form, data, submit }) => {
+  // ✅ data is typed object
+  const pakketId = data.pakketIdentificatieNr;
+  
+  try {
+    await submit().updates(
+      getPakketten(parseInt(data.vrachtNr)).withOverride((current: Pakket[]) => {
+        return current.map(p => 
+          p.pakket_identificatie_nr === pakketId 
+            ? { ...p, pakket_status: 83 } 
+            : p
+        );
+      })
+    );
+    form.reset();
+  } catch (error) {
+    toast.error(error.message);
+    form.reset();
+  }
+})}>
+  <input name="pakketIdentificatieNr" />
+  <button type="submit">Submit</button>
+</form>
+```
+
+**Key Points:**
+- Use `data.propertyName` (not `data.get()`)
+- Use `submit().updates(query.withOverride(...))` for optimistic updates
+- Errors throw automatically - use try/catch
+- Reset form after submission
+
+## 4. Optimistic Updates
+
+Both the `#await` block and `.withOverride()` must use identical query calls:
+
+```svelte
+<!-- Data loading -->
+{#await getVrachtPakketten({ vrachtNr })}
+  <Loading />
+{:then pakketten}
+  <PakkettenTable pakketten={pakketten} />
+{/await}
+
+<!-- Form handler with SAME query call -->
+<form {...form.enhance(async ({ submit }) => {
+  await submit().updates(
+    getVrachtPakketten({ vrachtNr }).withOverride((current: Pakket[]) => {
+      return current.map(p => /* update */);
+    })
+  );
+})}>
+```
+
+**Key Point**: Query calls must be identical - SvelteKit caches and reuses the same promise.
+
+### Refresh Patterns
+
+```typescript
+// Client-side refresh
+await command(payload).updates(getPakketten({ vrachtNr }));
+getPakketten({ vrachtNr }).refresh(); // Sparingly
+
+// Server-side refresh (inside command)
+await getPakketten({ vrachtNr }).refresh();
+
+// General refresh
+import { invalidateAll } from '$app/navigation';
+await invalidateAll();
+```
+
+## 5. Scroll Stability
+
+Prefer optimistic updates over refresh to prevent scroll jumps:
+
+```svelte
+<!-- Simple scroll container -->
+<div class="table-wrapper" style="max-height: 50vh; overflow: auto;">
+  <!-- table -->
+</div>
+
+<!-- Focus without scroll -->
+<script>
+  function focusInput() {
+    inputEl.focus({ preventScroll: true });
+  }
+</script>
+```
+
+## 6. Quick Reference
+
+### Data Loading
+- ✅ Use direct `#await getPakketten({ vrachtNr })` in templates
+- ❌ Don't wrap in `$derived.by()` or access `.current`
+- ✅ Place `svelte:boundary` inside conditionals
+- ✅ Always use separate `{#await}`, `{:then}`, `{:catch}` blocks
+- ❌ Never use `{#snippet pending()}` blocks
+- ✅ Always provide explicit pending states
+
+### Form Enhancement
+- ✅ Data access: `data.propertyName`
+- ✅ Optimistic updates: `submit().updates(query.withOverride(...))`
+- ✅ Error handling: Let errors throw, use try/catch
+
+### Optimistic Updates
+- ✅ Ensure query calls match exactly in `#await` and `.withOverride()`
+- ❌ Don't call context refresh after optimistic updates
+
+## Related Rules
+- See [freight-management-patterns.mdc](mdc:freight-management-patterns.mdc) for freight-specific patterns
+- See [project-coding-standards.mdc](mdc:project-coding-standards.mdc) for general coding standards
+- See [svelte-5-best-practices.mdc](mdc:svelte-5-best-practices.mdc) for Svelte 5 patterns

@@ -1,8 +1,0 @@
-id: svelte-avoid-export-let
-message: "Avoid 'export let' in Svelte 5; use $props() for typed props."
-severity: warning
-language: svelte
-rule:
-  any:
-    - pattern: "export let $P: $T"
-    - pattern: "export let $P"

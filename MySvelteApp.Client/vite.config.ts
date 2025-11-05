@@ -5,6 +5,11 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	assetsInclude: ['**/*.svg'],
+	server: {
+		watch: {
+			ignored: ['!**/api/**/*']
+		}
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

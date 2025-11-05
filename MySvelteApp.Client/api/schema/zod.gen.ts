@@ -21,6 +21,22 @@ export const zAuthSuccessResponse = z.object({
     ]))
 });
 
+export const zUserDto = z.object({
+    id: z.optional(z.int()),
+    username: z.optional(z.union([
+        z.string(),
+        z.null()
+    ])),
+    email: z.optional(z.union([
+        z.string(),
+        z.null()
+    ]))
+});
+
+export const zCurrentUserResponse = z.object({
+    user: z.optional(zUserDto)
+});
+
 export const zLoginRequest = z.object({
     username: z.optional(z.union([
         z.string(),
@@ -62,25 +78,6 @@ export const zRegisterRequest = z.object({
     ]))
 });
 
-export const zWeatherForecastDto = z.object({
-    date: z.optional(z.iso.date()),
-    temperatureC: z.optional(z.int()),
-    summary: z.optional(z.union([
-        z.string(),
-        z.null()
-    ])),
-    temperatureF: z.optional(z.int().readonly())
-});
-
-export const zWeatherForecastDtoWritable = z.object({
-    date: z.optional(z.iso.date()),
-    temperatureC: z.optional(z.int()),
-    summary: z.optional(z.union([
-        z.string(),
-        z.null()
-    ]))
-});
-
 export const zPostAuthRegisterData = z.object({
     body: z.optional(zRegisterRequest),
     path: z.optional(z.never()),
@@ -103,6 +100,17 @@ export const zPostAuthLoginData = z.object({
  */
 export const zPostAuthLoginResponse = zAuthSuccessResponse;
 
+export const zGetAuthMeData = z.object({
+    body: z.optional(z.never()),
+    path: z.optional(z.never()),
+    query: z.optional(z.never())
+});
+
+/**
+ * OK
+ */
+export const zGetAuthMeResponse = zCurrentUserResponse;
+
 export const zGetRandomPokemonData = z.object({
     body: z.optional(z.never()),
     path: z.optional(z.never()),
@@ -119,14 +127,3 @@ export const zGetTestAuthData = z.object({
     path: z.optional(z.never()),
     query: z.optional(z.never())
 });
-
-export const zGetWeatherForecastData = z.object({
-    body: z.optional(z.never()),
-    path: z.optional(z.never()),
-    query: z.optional(z.never())
-});
-
-/**
- * OK
- */
-export const zGetWeatherForecastResponse = z.array(zWeatherForecastDto);

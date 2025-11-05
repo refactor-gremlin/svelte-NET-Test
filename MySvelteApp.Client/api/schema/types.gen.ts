@@ -10,6 +10,10 @@ export type AuthSuccessResponse = {
     username?: string | null;
 };
 
+export type CurrentUserResponse = {
+    user?: UserDto;
+};
+
 export type LoginRequest = {
     username?: string | null;
     password?: string | null;
@@ -27,17 +31,10 @@ export type RegisterRequest = {
     password?: string | null;
 };
 
-export type WeatherForecastDto = {
-    date?: string;
-    temperatureC?: number;
-    summary?: string | null;
-    readonly temperatureF?: number;
-};
-
-export type WeatherForecastDtoWritable = {
-    date?: string;
-    temperatureC?: number;
-    summary?: string | null;
+export type UserDto = {
+    id?: number;
+    username?: string | null;
+    email?: string | null;
 };
 
 export type PostAuthRegisterData = {
@@ -94,6 +91,31 @@ export type PostAuthLoginResponses = {
 
 export type PostAuthLoginResponse = PostAuthLoginResponses[keyof PostAuthLoginResponses];
 
+export type GetAuthMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/Auth/me';
+};
+
+export type GetAuthMeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: AuthErrorResponse;
+};
+
+export type GetAuthMeError = GetAuthMeErrors[keyof GetAuthMeErrors];
+
+export type GetAuthMeResponses = {
+    /**
+     * OK
+     */
+    200: CurrentUserResponse;
+};
+
+export type GetAuthMeResponse = GetAuthMeResponses[keyof GetAuthMeResponses];
+
 export type GetRandomPokemonData = {
     body?: never;
     path?: never;
@@ -124,22 +146,6 @@ export type GetTestAuthResponses = {
     200: unknown;
 };
 
-export type GetWeatherForecastData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/WeatherForecast';
-};
-
-export type GetWeatherForecastResponses = {
-    /**
-     * OK
-     */
-    200: Array<WeatherForecastDto>;
-};
-
-export type GetWeatherForecastResponse = GetWeatherForecastResponses[keyof GetWeatherForecastResponses];
-
 export type ClientOptions = {
-    baseUrl: 'http://localhost:7216' | (string & {});
+    baseUrl: 'http://localhost:5000' | (string & {});
 };

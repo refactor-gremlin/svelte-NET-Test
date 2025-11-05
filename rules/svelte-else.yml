@@ -1,7 +1,0 @@
-id: svelte-else
-message: "Svelte {:else} block"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: "^\\{\\s*:\\s*else\\b"

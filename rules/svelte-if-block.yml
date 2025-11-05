@@ -1,7 +1,0 @@
-id: svelte-if-block
-message: "Svelte {#if} block"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '\{#if\s+[^}]+\}'

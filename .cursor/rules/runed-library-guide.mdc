@@ -1,0 +1,648 @@
+---
+description: Runed library utilities guide - when and how to use each utility
+alwaysApply: false
+---
+# Runed Library Utilities Guide
+
+Runed is a collection of utilities designed for Svelte 5 applications, leveraging Svelte Runes to simplify common patterns and reduce boilerplate. This guide documents all available utilities and when to use them.
+
+## Reactivity Utilities
+
+### `watch` - Selective Reactive Dependency Tracking
+
+Manually specify which reactive values should trigger a callback, providing more control than `$effect`'s automatic dependency tracking.
+
+**When to use:**
+- You need fine-grained control over which dependencies trigger updates
+- You want to watch specific deep properties without watching the entire object
+- You need lazy evaluation (skip initial run)
+- You want to compare previous and current values
+
+**Example:**
+```typescript
+import { watch } from "runed";
+
+let count = $state(0);
+let name = $state("Alice");
+
+// Watch a single value
+watch(() => count, (curr, prev) => {
+  console.log(`count changed from ${prev} to ${curr}`);
+});
+
+// Watch multiple values
+watch([() => count, () => name], ([currCount, currName], [prevCount, prevName]) => {
+  console.log(`count: ${currCount}, name: ${currName}`);
+});
+
+// Deep watch with lazy mode
+watch(() => user.age, () => {
+  console.log(`User is now ${user.age} years old`);
+}, { lazy: true });
+```
+
+### `extract` - Resolve Getter or Static Values
+
+Simplifies handling parameters that can be either reactive getters or static values, reducing verbose conditional logic.
+
+**When to use:**
+- Building library functions that accept both reactive and static values
+- Reducing conditional logic for parameter handling
+- Creating flexible APIs that work with both getters and values
+
+**Example:**
+```typescript
+import { extract } from "runed";
+
+let intervalMs = $state<number | undefined>(500);
+
+function startTimer(intervalProp?: MaybeGetter<number | undefined>) {
+  const interval = $derived(extract(intervalProp, 100));
+  setInterval(() => console.log("Tick"), interval);
+}
+
+// Works with reactive value
+startTimer(() => intervalMs);
+
+// Works with static value
+startTimer(1000);
+
+// Works with no value (fallback)
+startTimer();
+```
+
+### `useSearchParams` - Schema-Validated URL Search Parameters
+
+Reactive, type-safe URL search parameter management with validation, compression, debouncing, and cross-tab synchronization.
+
+**When to use:**
+- Managing URL query parameters with type safety
+- Building search/filter interfaces that sync with URL
+- Need validation of URL parameters
+- Want automatic debouncing of URL updates
+- Need cross-tab synchronization
+
+**Example:**
+```typescript
+import { useSearchParams } from "runed/kit";
+import { z } from "zod";
+
+const schema = z.object({
+  page: z.coerce.number().default(1),
+  filter: z.string().default(""),
+  sort: z.enum(["newest", "oldest", "price"]).default("newest")
+});
+
+const params = useSearchParams(schema, {
+  showDefaults: false,
+  debounce: 300,
+  pushHistory: false,
+  compress: false,
+  updateURL: true
+});
+
+// Direct property access (fully typed)
+console.log(params.page);    // number
+params.page = 2;              // Updates URL automatically
+```
+
+## State Management
+
+### `Debounced` - Debounced Reactive State Wrapper
+
+Wraps a reactive value and returns a debounced version that only updates after a specified delay.
+
+**When to use:**
+- Search inputs that trigger API calls
+- Filter controls that update expensive computations
+- User input that should be delayed before processing
+- Preventing excessive updates during rapid state changes
+
+**Example:**
+```typescript
+import { Debounced } from "runed";
+
+let search = $state("");
+const debounced = new Debounced(() => search, 500);
+
+// Access debounced value
+console.log(debounced.current);  // Updates 500ms after search changes
+
+// Manual control
+debounced.cancel();
+debounced.updateImmediately();
+debounced.setImmediately(search);
+```
+
+### `useDebounce` - Debounced Values Hook
+
+Alternative debouncing utility that returns a debounced value directly.
+
+**When to use:**
+- Simpler debouncing needs than `Debounced` class
+- Direct debounced value access without class instantiation
+
+**Example:**
+```typescript
+import { useDebounce } from "runed";
+
+let searchQuery = $state("");
+const debouncedQuery = useDebounce(() => searchQuery, 300);
+```
+
+### `FiniteStateMachine` - Type-Safe State Machines
+
+Strongly-typed finite state machine implementation with actions, lifecycle hooks, wildcard handlers, and debouncing.
+
+**When to use:**
+- Complex component states (forms, modals, wizards)
+- Media players with play/pause/stop states
+- Game logic with state transitions
+- Multi-step processes with clear state transitions
+- Need type-safe state management with validation
+
+**Example:**
+```typescript
+import { FiniteStateMachine } from "runed";
+
+type States = "disabled" | "idle" | "running" | "cooldown";
+type Events = "toggleEnabled" | "start" | "stop" | "reset";
+
+const machine = new FiniteStateMachine<States, Events>("disabled", {
+  disabled: {
+    toggleEnabled: "idle"
+  },
+  idle: {
+    toggleEnabled: "disabled",
+    start: "running"
+  },
+  running: {
+    _enter: (meta) => console.log("Started running"),
+    _exit: (meta) => console.log("Stopped running"),
+    stop: "idle",
+    toggleEnabled: "disabled"
+  },
+  "*": {
+    reset: "disabled"  // Wildcard handler
+  }
+});
+
+machine.send("toggleEnabled");  // disabled -> idle
+machine.send("start");          // idle -> running
+```
+
+### `PersistedState` - Browser Storage with Cross-Tab Sync
+
+Reactive state that automatically persists to localStorage/sessionStorage and synchronizes across browser tabs.
+
+**When to use:**
+- User preferences that should persist across sessions
+- Form drafts that should survive page refreshes
+- Settings that should sync across tabs
+- Cache data that should persist
+- Modal open/close state (often with `syncTabs: false`)
+
+**Example:**
+```typescript
+import { PersistedState } from "runed";
+
+// Basic usage
+const count = new PersistedState("count", 0);
+count.current++;  // Automatically persists and syncs across tabs
+
+// Complex objects
+const user = new PersistedState("user", { name: "Bob", age: 25 });
+user.current.name = "Alice";  // Persisted
+
+// Configuration
+const prefs = new PersistedState("prefs", { theme: "dark" }, {
+  storage: "session",      // Use sessionStorage
+  syncTabs: false,         // Disable cross-tab sync
+  serializer: {
+    serialize: superjson.stringify,
+    deserialize: superjson.parse
+  }
+});
+```
+
+### `StateHistory` - Undo/Redo with Timestamped History
+
+Tracks state changes over time with undo/redo capabilities and a timestamped history log.
+
+**When to use:**
+- Text editors with undo/redo
+- Form editors with change history
+- Collaborative editing features
+- Any feature requiring undo/redo functionality
+- Audit logging of state changes
+
+**Example:**
+```typescript
+import { StateHistory } from "runed";
+
+let text = $state("");
+const textHistory = new StateHistory(() => text, (t) => (text = t));
+
+text = "Hello";
+text = "Hello World";
+text = "Hello World!";
+
+textHistory.undo();  // text = "Hello World"
+textHistory.undo();  // text = "Hello"
+textHistory.redo();  // text = "Hello World"
+
+console.log(textHistory.canUndo);  // true
+console.log(textHistory.log);      // Array of timestamped snapshots
+```
+
+### `Context` - Type-Safe Component Context API
+
+Type-safe wrapper around Svelte's context API with improved ergonomics for sharing data through the component tree.
+
+**When to use:**
+- Sharing theme, authentication, or configuration across components
+- Avoiding prop drilling in deeply nested components
+- Providing global state to component trees
+- Creating reusable context providers
+
+**Example:**
+```typescript
+import { Context } from "runed";
+
+// context.ts
+export const myTheme = new Context<"light" | "dark">("theme");
+
+// Parent component
+import { myTheme } from "./context";
+myTheme.set("dark");
+
+// Child component
+import { myTheme } from "./context";
+const theme = myTheme.get();              // Throws if not set
+const themeSafe = myTheme.getOr("light"); // Returns default if not set
+const exists = myTheme.exists();          // Check if context exists
+```
+
+## Element Utilities
+
+### `activeElement` - Track Currently Focused Element
+
+Provides reactive access to the currently focused DOM element, similar to `document.activeElement` but with automatic updates.
+
+**When to use:**
+- Managing focus-related behaviors
+- Styling based on focused element
+- Keyboard navigation enhancements
+- Focus management in complex UIs
+- Detecting which input is currently active
+
+**Example:**
+```typescript
+import { activeElement } from "runed";
+
+let inputElement = $state<HTMLInputElement | undefined>();
+
+$effect(() => {
+  if (activeElement.current === inputElement) {
+    console.log("Input is focused");
+  }
+});
+
+// Custom document/shadow root
+import { ActiveElement } from "runed";
+const customActiveElement = new ActiveElement({
+  document: shadowRoot
+});
+```
+
+### `IsFocusWithin` - Check if Focus is Within Element
+
+Detects if focus is currently within a specific element or its descendants.
+
+**When to use:**
+- Preventing focus theft when modals/dropdowns are open
+- Managing focus states for complex UI components
+- Ensuring focus stays within containers
+- Implementing accessible focus management
+
+**Example:**
+```typescript
+import { IsFocusWithin } from "runed";
+
+const getModalContainer = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
+const modalFocusWithin = new IsFocusWithin(getModalContainer);
+const isFocusInModal = $derived(modalFocusWithin.current);
+
+if (isFocusInModal) {
+  console.log("Focus is inside modal");
+}
+```
+
+### `IsDocumentVisible` - Check if Document is Visible
+
+Detects if the document/page is currently visible to the user.
+
+**When to use:**
+- Pausing animations/timers when tab is hidden
+- Stopping API polling when page is not visible
+- Reducing resource usage when tab is inactive
+- Implementing visibility-based optimizations
+
+**Example:**
+```typescript
+import { IsDocumentVisible } from "runed";
+
+const isVisible = $derived(IsDocumentVisible.current);
+
+$effect(() => {
+  if (!isVisible) {
+    // Pause expensive operations
+  }
+});
+```
+
+### `useIntersectionObserver` - Watch Element Viewport Intersection
+
+Detects when elements enter or exit the viewport using the Intersection Observer API with reactive callbacks.
+
+**When to use:**
+- Lazy loading images
+- Infinite scroll implementations
+- Triggering animations when elements become visible
+- Tracking analytics for viewport visibility
+- Performance optimizations for off-screen content
+
+**Example:**
+```typescript
+import { useIntersectionObserver } from "runed";
+
+let target = $state<HTMLElement | null>(null);
+let isIntersecting = $state(false);
+
+const observer = useIntersectionObserver(
+  () => target,
+  (entries) => {
+    isIntersecting = entries[0]?.isIntersecting ?? false;
+  },
+  {
+    rootMargin: "0px",
+    threshold: 0.5
+  }
+);
+
+// Control observer
+observer.pause();
+observer.resume();
+observer.stop();
+```
+
+### `useEventListener` - Automatic Event Listener Cleanup
+
+Attaches event listeners that are automatically cleaned up when components unmount or element references change.
+
+**When to use:**
+- Adding event listeners to DOM elements
+- Window/document-level event listeners
+- Keyboard shortcuts
+- Scroll/resize listeners
+- Any event listener that needs automatic cleanup
+
+**Example:**
+```typescript
+import { useEventListener } from "runed";
+
+let button = $state<HTMLButtonElement>();
+
+useEventListener(
+  () => button,
+  "click",
+  (event) => {
+    console.log("Button clicked", event);
+  }
+);
+
+// Window events
+useEventListener(
+  () => window,
+  "resize",
+  () => {
+    console.log(`Window size: ${window.innerWidth}x${window.innerHeight}`);
+  }
+);
+
+// Multiple listeners with options
+useEventListener(
+  () => element,
+  "scroll",
+  handleScroll,
+  { passive: true }
+);
+```
+
+### `onClickOutside` - Detect Clicks Outside Elements
+
+Executes a callback when clicks occur outside specified element boundaries, with support for controlled start/stop.
+
+**When to use:**
+- Closing modals/dialogs when clicking outside
+- Closing dropdown menus when clicking outside
+- Dismissing popovers/tooltips
+- Implementing "click outside to close" behavior
+- Form validation on blur
+
+**Example:**
+```typescript
+import { onClickOutside } from "runed";
+
+let dialog = $state<HTMLDialogElement>();
+
+const clickOutside = onClickOutside(
+  () => dialog,
+  () => {
+    dialog.close();
+    clickOutside.stop();
+  },
+  { immediate: false }
+);
+
+function openDialog() {
+  dialog.showModal();
+  clickOutside.start();
+}
+```
+
+### `ScrollState` - Scroll Position Management
+
+Manages scroll position state for elements, providing reactive access to scroll position.
+
+**When to use:**
+- Restoring scroll position after navigation
+- Tracking scroll position for analytics
+- Implementing scroll-based animations
+- Maintaining scroll state across component updates
+- Preserving scroll position in lists/tables
+
+**Example:**
+```typescript
+import { ScrollState } from "runed";
+
+let scrollContainer = $state<HTMLElement | null>(null);
+const scrollState = new ScrollState(() => scrollContainer);
+
+// Access scroll position
+console.log(scrollState.scrollTop);
+console.log(scrollState.scrollLeft);
+
+// Restore scroll position
+scrollState.scrollTop = 500;
+```
+
+### `TextareaAutosize` - Auto-Resizing Textareas
+
+Automatically adjusts textarea height based on content, with configurable min/max heights.
+
+**When to use:**
+- Comment forms that grow with content
+- Multi-line input fields
+- Forms with variable-length text input
+- Chat interfaces with expanding input
+- Any textarea that should resize to content
+
+**Example:**
+```typescript
+import { TextareaAutosize } from "runed";
+
+let textareaRef = $state<HTMLTextAreaElement | null>(null);
+let input = $state("");
+
+const textareaAutosize = new TextareaAutosize({
+  element: () => textareaRef ?? undefined,
+  input: () => input,
+  styleProp: 'minHeight',
+  maxHeight: 200  // Allow scrolling after 200px
+});
+```
+
+### `useInterval` - Interval Management
+
+Manages intervals with automatic cleanup and pause/resume support.
+
+**When to use:**
+- Polling APIs at regular intervals
+- Updating timers/clocks
+- Periodic UI updates
+- Scheduled tasks
+- Any interval that needs cleanup
+
+**Example:**
+```typescript
+import { useInterval } from "runed";
+
+const interval = useInterval(1000, {
+  callback: () => {
+    console.log("Tick");
+  }
+});
+
+// Control interval
+interval.pause();
+interval.resume();
+interval.stop();
+
+if (interval.isActive) {
+  console.log("Interval is running");
+}
+```
+
+### `onCleanup` - Cleanup Function Registration
+
+Registers cleanup functions that run when components unmount or effects re-run.
+
+**When to use:**
+- Cleaning up timers/subscriptions
+- Removing event listeners manually
+- Cleaning up resources in effects
+- Any cleanup logic that needs to run on unmount
+
+**Example:**
+```typescript
+import { onCleanup } from "runed";
+
+$effect(() => {
+  const timer = setInterval(() => {
+    console.log("Tick");
+  }, 1000);
+
+  onCleanup(() => {
+    clearInterval(timer);
+  });
+});
+```
+
+## Best Practices
+
+### When to Use Runed vs Native Svelte
+
+**Use Runed utilities when:**
+- You need automatic cleanup (useEventListener, useInterval)
+- You need persistence (PersistedState)
+- You need cross-tab synchronization
+- You need debouncing/throttling
+- You need type-safe state machines
+- You need undo/redo functionality
+- You need complex DOM observation (IntersectionObserver, focus tracking)
+
+**Use native Svelte when:**
+- Simple reactive state (`$state`, `$derived`)
+- Simple effects (`$effect`)
+- Basic event handlers (`onclick`, `onkeydown`)
+- Simple conditional rendering (`{#if}`)
+
+### Performance Considerations
+
+- `PersistedState` with `syncTabs: false` for modal state (no need for cross-tab sync)
+- Use `debounce` options in `resource` to prevent excessive API calls
+- Use `lazy: true` in `watch` to skip initial runs when not needed
+- Use `once: true` in `resource` when data doesn't need refetching
+- Prefer `onClickOutside` with `immediate: false` for controlled behavior
+
+### Common Patterns
+
+**Modal State Management:**
+```typescript
+const modalState = new PersistedState("modal", { open: false }, {
+  syncTabs: false  // Modals shouldn't sync across tabs
+});
+```
+
+**Focus Management:**
+```typescript
+import { activeElement, IsFocusWithin } from "runed";
+
+const getModalContainer = () => document.querySelector('[role="dialog"]');
+const modalFocusWithin = new IsFocusWithin(getModalContainer);
+const isFocusInModal = $derived(modalFocusWithin.current);
+
+// Only focus scanner if not in modal
+if (!isFocusInModal) {
+  scannerInput.focus();
+}
+```
+
+**Search with Debouncing:**
+```typescript
+let searchQuery = $state("");
+const debouncedQuery = useDebounce(() => searchQuery, 300);
+
+$effect(() => {
+  if (debouncedQuery) {
+    // Perform search
+  }
+});
+```
+
+## Related Rules
+
+- See [SvelteKit Remote Functions](mdc:sveltekit-remote-functions.mdc) for data fetching patterns
+- See [Svelte 5 Best Practices](mdc:svelte-5-best-practices.mdc) for general Svelte 5 patterns
+- See [OOP State Management Pattern](mdc:oop-state-management-pattern.mdc) for state management patterns

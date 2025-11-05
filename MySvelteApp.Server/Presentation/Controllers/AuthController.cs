@@ -58,6 +58,26 @@ public class AuthController : ControllerBase
         });
     }
 
+    [HttpGet("me")]
+    [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(AuthErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetCurrentUser(CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+        {
+            return Unauthorized(new AuthErrorResponse { Message = "Invalid token." });
+        }
+
+        var currentUser = await _authService.GetCurrentUserAsync(userId, cancellationToken);
+        if (currentUser == null)
+        {
+            return Unauthorized(new AuthErrorResponse { Message = "User not found." });
+        }
+
+        return Ok(currentUser);
+    }
+
     private IActionResult ToErrorResponse(AuthResult result)
     {
         var errorMessage = result.ErrorMessage ?? "An unknown error occurred.";

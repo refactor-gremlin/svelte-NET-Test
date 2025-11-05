@@ -1,7 +1,0 @@
-id: svelte-else-if
-message: "Svelte {:else if} block"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  pattern: "{:else if $COND} $BODY?"

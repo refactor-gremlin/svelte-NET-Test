@@ -1,6 +1,0 @@
-id: svelte-avoid-create-event-dispatcher
-message: "Avoid createEventDispatcher in Svelte 5; use callback props instead."
-severity: warning
-language: svelte
-rule:
-  pattern: "createEventDispatcher($$$)"

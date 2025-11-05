@@ -1,7 +1,7 @@
 import { defineConfig } from '@hey-api/openapi-ts';
 
 export default defineConfig({
-  input: 'http://localhost:7216/swagger/v1/swagger.json',
+  input: 'http://localhost:5000/swagger/v1/swagger.json',
   output: 'api/schema',
   plugins: [
     '@hey-api/client-fetch',               // HTTP client plugin :contentReference[oaicite:3]{index=3}

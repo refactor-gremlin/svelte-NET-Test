@@ -1,7 +1,0 @@
-id: svelte-avoid-on-directives
-message: "Avoid Svelte 'on:' directives; use explicit DOM handler props (e.g. onclick=)."
-severity: warning
-language: svelte
-rule:
-  kind: attribute_name
-  regex: '^on:'

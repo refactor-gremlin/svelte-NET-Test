@@ -2,19 +2,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            // Use IntelliSense to find out which attributes exist for C# debugging
-            // Use hover for the description of the existing attributes
-            // For further information visit https://github.com/dotnet/vscode-csharp/blob/main/debugger-launchjson.md.
-            "name": "Start Application",
+            "name": "Debug: Backend (.NET)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
+            "preLaunchTask": "build: backend",
             "program": "${workspaceFolder}/MySvelteApp.Server/bin/Debug/net9.0/MySvelteApp.Server.dll",
             "args": [],
             "cwd": "${workspaceFolder}/MySvelteApp.Server",
             "stopAtEntry": false,
-            // Enable launching a web browser when ASP.NET Core starts. For more information: https://aka.ms/VSCode-CS-LaunchJson-WebBrowser
             "serverReadyAction": {
                 "action": "openExternally",
                 "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
@@ -27,19 +22,46 @@
             }
         },
         {
-            "name": "Start Observability",
-            "type": "pwa-node",
+            "name": "Debug: Frontend (Svelte)",
+            "type": "node-terminal",
             "request": "launch",
-            "runtimeExecutable": "docker",
-            "runtimeArgs": [
-                "compose",
-                "-f",
-                "${workspaceFolder}/observability.compose.yml",
-                "up"
-            ],
-            "console": "integratedTerminal",
-            "postDebugTask": "compose: stop observability"
+            "command": "npm run dev",
+            "cwd": "${workspaceFolder}/MySvelteApp.Client",
+            "presentation": {
+                "hidden": false,
+                "group": "Frontend",
+                "order": 1
+            }
+        },
+        {
+            "name": "Launch: Frontend (Chrome)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/MySvelteApp.Client/src",
+            "sourceMaps": true,
+            "preLaunchTask": "run: frontend"
+        },
+        {
+            "name": "Launch: Frontend (Edge)",
+            "type": "msedge",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/MySvelteApp.Client/src",
+            "sourceMaps": true,
+            "preLaunchTask": "run: frontend"
+        },
+        {
+            "name": "Generate: API Classes",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "npm run generate-api-classes",
+            "cwd": "${workspaceFolder}/MySvelteApp.Client",
+            "presentation": {
+                "hidden": false,
+                "group": "Tools",
+                "order": 1
+            }
         }
-    ],
-    "compounds": []
+    ]
 }

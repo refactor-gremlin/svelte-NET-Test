@@ -1,7 +1,0 @@
-id: svelte-legacy-component
-message: "svelte:component is no longer necessary in Svelte 5; use dynamic component variables directly."
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '<svelte:component\s+[^>]*>'

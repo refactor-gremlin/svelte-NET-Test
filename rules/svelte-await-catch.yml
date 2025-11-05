@@ -1,7 +1,0 @@
-id: svelte-await-catch
-message: "Svelte {#await} with {:catch}"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '\{#await\s+[^}]+\}.*\{:catch\s+[^}]+\}'

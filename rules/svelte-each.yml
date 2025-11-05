@@ -1,7 +1,0 @@
-id: svelte-each
-message: "Svelte {#each} block"
-severity: info
-language: svelte
-rule:
-  kind: svelte_raw_text
-  regex: '\{#each\s+[^}]+as\s+[^}]+\}'

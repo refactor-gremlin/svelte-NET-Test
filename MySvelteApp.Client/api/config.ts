@@ -2,9 +2,9 @@
 import { dev } from '$app/environment';
 import { PUBLIC_API_ENDPOINT } from '$env/static/public';
 
-const defaultDevUrl  = 'http://localhost:7216';
-const defaultDockerDevUrl = 'http://api:7216'; // Default for docker development
-const defaultProdUrl = 'http://api:8080'; // Default for docker production
+const defaultDevUrl  = 'http://localhost:5000';
+const defaultDockerDevUrl = 'http://api:5000'; // Default for docker development
+const defaultProdUrl = 'http://api:5000'; // Default for docker production
 
 export const config = {
   apiEndpoint:
@@ -18,3 +18,5 @@ export const config = {
               ? defaultDockerDevUrl 
               : defaultDevUrl))
 };
+
+//** Also check openapi-ts.config.ts for the API endpoint, one is for runtime, one is for generation */

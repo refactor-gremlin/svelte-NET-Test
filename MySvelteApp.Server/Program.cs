@@ -7,13 +7,13 @@ using Microsoft.OpenApi.Models;
 using MySvelteApp.Server.Application.Authentication;
 using MySvelteApp.Server.Application.Common.Interfaces;
 using MySvelteApp.Server.Application.Pokemon;
-using MySvelteApp.Server.Application.Weather;
+
 using MySvelteApp.Server.Infrastructure.Authentication;
 using MySvelteApp.Server.Infrastructure.External;
 using MySvelteApp.Server.Infrastructure.Persistence;
 using MySvelteApp.Server.Infrastructure.Persistence.Repositories;
 using MySvelteApp.Server.Infrastructure.Security;
-using MySvelteApp.Server.Infrastructure.Weather;
+
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -130,7 +130,7 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpClient<IRandomPokemonService, PokeApiRandomPokemonService>();
-builder.Services.AddSingleton<IWeatherForecastService, WeatherForecastService>();
+
 
 var app = builder.Build();
 
