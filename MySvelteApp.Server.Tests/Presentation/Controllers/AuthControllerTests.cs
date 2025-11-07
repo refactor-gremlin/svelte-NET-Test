@@ -5,18 +5,22 @@ using MySvelteApp.Server.Presentation.Controllers;
 using MySvelteApp.Server.Application.Authentication;
 using MySvelteApp.Server.Application.Authentication.DTOs;
 using MySvelteApp.Server.Presentation.Models.Auth;
+using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Presentation.Controllers;
 
-public class AuthControllerTests
+public class AuthControllerTests : ControllerTestTemplate<AuthController>
 {
     private readonly Mock<IAuthService> _mockAuthService;
-    private readonly AuthController _authController;
 
     public AuthControllerTests()
     {
         _mockAuthService = new Mock<IAuthService>();
-        _authController = new AuthController(_mockAuthService.Object);
+    }
+
+    protected override AuthController CreateController()
+    {
+        return new AuthController(_mockAuthService.Object);
     }
 
     [Fact]
@@ -42,12 +46,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Register(request, CancellationToken.None);
+        var result = await Controller.Register(request, CancellationToken.None);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var response = okResult.Value.Should().BeOfType<AuthSuccessResponse>().Subject;
-
+        var response = ControllerAssertionUtilities.AssertOkResult<AuthSuccessResponse>(result);
         response.Token.Should().Be(authResult.Token);
         response.UserId.Should().Be(authResult.UserId);
         response.Username.Should().Be(authResult.Username);
@@ -75,13 +77,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Register(request, CancellationToken.None);
+        var result = await Controller.Register(request, CancellationToken.None);
 
         // Assert
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var response = badRequestResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be(authResult.ErrorMessage);
+        ControllerAssertionUtilities.AssertBadRequestResult(result, authResult.ErrorMessage);
     }
 
     [Fact]
@@ -106,13 +105,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Register(request, CancellationToken.None);
+        var result = await Controller.Register(request, CancellationToken.None);
 
         // Assert
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var response = badRequestResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be(authResult.ErrorMessage);
+        ControllerAssertionUtilities.AssertBadRequestResult(result, authResult.ErrorMessage);
     }
 
     [Fact]
@@ -137,12 +133,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Login(request, CancellationToken.None);
+        var result = await Controller.Login(request, CancellationToken.None);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var response = okResult.Value.Should().BeOfType<AuthSuccessResponse>().Subject;
-
+        var response = ControllerAssertionUtilities.AssertOkResult<AuthSuccessResponse>(result);
         response.Token.Should().Be(authResult.Token);
         response.UserId.Should().Be(authResult.UserId);
         response.Username.Should().Be(authResult.Username);
@@ -169,13 +163,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Login(request, CancellationToken.None);
+        var result = await Controller.Login(request, CancellationToken.None);
 
         // Assert
-        var badRequestResult = result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        var response = badRequestResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be(authResult.ErrorMessage);
+        ControllerAssertionUtilities.AssertBadRequestResult(result, authResult.ErrorMessage);
     }
 
     [Fact]
@@ -199,13 +190,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Login(request, CancellationToken.None);
+        var result = await Controller.Login(request, CancellationToken.None);
 
         // Assert
-        var unauthorizedResult = result.Should().BeOfType<UnauthorizedObjectResult>().Subject;
-        var response = unauthorizedResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be(authResult.ErrorMessage);
+        ControllerAssertionUtilities.AssertUnauthorizedResult(result, authResult.ErrorMessage);
     }
 
     [Fact]
@@ -226,27 +214,13 @@ public class AuthControllerTests
         _mockAuthService.Setup(x => x.GetCurrentUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(currentUserResponse);
 
-        // Create a controller with a mock HttpContext that contains the user claim
-        var controller = new AuthController(_mockAuthService.Object);
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[]
-        {
-            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString())
-        }));
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
-            {
-                User = user
-            }
-        };
+        SetupAuthenticatedUser(userId);
 
         // Act
-        var result = await controller.GetCurrentUser(CancellationToken.None);
+        var result = await Controller.GetCurrentUser(CancellationToken.None);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var response = okResult.Value.Should().BeOfType<CurrentUserResponse>().Subject;
-
+        var response = ControllerAssertionUtilities.AssertOkResult<CurrentUserResponse>(result);
         response.User.Id.Should().Be(currentUserResponse.User.Id);
         response.User.Username.Should().Be(currentUserResponse.User.Username);
         response.User.Email.Should().Be(currentUserResponse.User.Email);
@@ -255,52 +229,40 @@ public class AuthControllerTests
     [Fact]
     public async Task GetCurrentUser_MissingUserIdClaim_ReturnsUnauthorized()
     {
-        // Arrange
-        var controller = new AuthController(_mockAuthService.Object);
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity()); // No claims
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
-            {
-                User = user
-            }
-        };
+        // Arrange - Controller already has no user set up
 
         // Act
-        var result = await controller.GetCurrentUser(CancellationToken.None);
+        var result = await Controller.GetCurrentUser(CancellationToken.None);
 
         // Assert
-        var unauthorizedResult = result.Should().BeOfType<UnauthorizedObjectResult>().Subject;
-        var response = unauthorizedResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be("Invalid token.");
+        ControllerAssertionUtilities.AssertUnauthorizedResult(result, "Invalid token.");
     }
 
     [Fact]
     public async Task GetCurrentUser_InvalidUserIdClaim_ReturnsUnauthorized()
     {
         // Arrange
-        var controller = new AuthController(_mockAuthService.Object);
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[]
+        // Set up invalid user ID claim
+        if (Controller is ControllerBase controllerBase)
         {
-            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "invalid-id")
-        }));
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[]
             {
-                User = user
-            }
-        };
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "invalid-id")
+            }));
+            controllerBase.ControllerContext = new ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
+                {
+                    User = user
+                }
+            };
+        }
 
         // Act
-        var result = await controller.GetCurrentUser(CancellationToken.None);
+        var result = await Controller.GetCurrentUser(CancellationToken.None);
 
         // Assert
-        var unauthorizedResult = result.Should().BeOfType<UnauthorizedObjectResult>().Subject;
-        var response = unauthorizedResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be("Invalid token.");
+        ControllerAssertionUtilities.AssertUnauthorizedResult(result, "Invalid token.");
     }
 
     [Fact]
@@ -312,27 +274,13 @@ public class AuthControllerTests
         _mockAuthService.Setup(x => x.GetCurrentUserAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((CurrentUserResponse?)null);
 
-        var controller = new AuthController(_mockAuthService.Object);
-        var user = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[]
-        {
-            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString())
-        }));
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
-            {
-                User = user
-            }
-        };
+        SetupAuthenticatedUser(userId);
 
         // Act
-        var result = await controller.GetCurrentUser(CancellationToken.None);
+        var result = await Controller.GetCurrentUser(CancellationToken.None);
 
         // Assert
-        var unauthorizedResult = result.Should().BeOfType<UnauthorizedObjectResult>().Subject;
-        var response = unauthorizedResult.Value.Should().BeOfType<AuthErrorResponse>().Subject;
-
-        response.Message.Should().Be("User not found.");
+        ControllerAssertionUtilities.AssertUnauthorizedResult(result, "User not found.");
     }
 
     [Fact]
@@ -358,12 +306,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Register(request, CancellationToken.None);
+        var result = await Controller.Register(request, CancellationToken.None);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var response = okResult.Value.Should().BeOfType<AuthSuccessResponse>().Subject;
-
+        var response = ControllerAssertionUtilities.AssertOkResult<AuthSuccessResponse>(result);
         response.Token.Should().BeEmpty();
         response.UserId.Should().Be(authResult.UserId);
         response.Username.Should().Be(authResult.Username);
@@ -391,12 +337,10 @@ public class AuthControllerTests
             .ReturnsAsync(authResult);
 
         // Act
-        var result = await _authController.Login(request, CancellationToken.None);
+        var result = await Controller.Login(request, CancellationToken.None);
 
         // Assert
-        var okResult = result.Should().BeOfType<OkObjectResult>().Subject;
-        var response = okResult.Value.Should().BeOfType<AuthSuccessResponse>().Subject;
-
+        var response = ControllerAssertionUtilities.AssertOkResult<AuthSuccessResponse>(result);
         response.Token.Should().Be(authResult.Token);
         response.UserId.Should().Be(authResult.UserId);
         response.Username.Should().BeEmpty();

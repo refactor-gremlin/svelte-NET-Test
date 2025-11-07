@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Moq.Protected;
 using FluentAssertions;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MySvelteApp.Server.Infrastructure.Persistence;
@@ -189,6 +192,243 @@ public static class AssertionUtilities
     public static void ShouldHaveStatusCode(this System.Net.Http.HttpResponseMessage response, HttpStatusCode expectedStatusCode, string because = "")
     {
         response.StatusCode.Should().Be(expectedStatusCode, because);
+    }
+}
+
+/// <summary>
+/// Controller assertion helpers for testing MVC controllers
+/// </summary>
+public static class ControllerAssertionUtilities
+{
+    /// <summary>
+    /// Asserts that an ActionResult has the expected status code and returns the expected value type.
+    /// </summary>
+    public static T AssertActionResult<T>(ActionResult<T> result, int expectedStatusCode, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Result.Should().BeOfType<ObjectResult>(because);
+        var objectResult = result.Result as ObjectResult;
+        objectResult!.StatusCode.Should().Be(expectedStatusCode, because);
+        objectResult.Value.Should().BeOfType<T>(because);
+        return (T)objectResult.Value!;
+    }
+
+    /// <summary>
+    /// Asserts that an IActionResult is an OkObjectResult with the expected value type.
+    /// </summary>
+    public static T AssertOkResult<T>(IActionResult result, T? expectedValue = default, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Should().BeOfType<OkObjectResult>(because);
+        var okResult = result as OkObjectResult;
+        okResult!.Value.Should().BeOfType<T>(because);
+        
+        if (expectedValue != null)
+        {
+            okResult.Value.Should().BeEquivalentTo(expectedValue, because);
+        }
+        
+        return (T)okResult.Value!;
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult<T> is an OkObjectResult with the expected value.
+    /// </summary>
+    public static T AssertOkResult<T>(ActionResult<T> result, T? expectedValue = default, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Result.Should().BeOfType<OkObjectResult>(because);
+        var okResult = result.Result as OkObjectResult;
+        okResult!.Value.Should().BeOfType<T>(because);
+        
+        if (expectedValue != null)
+        {
+            okResult.Value.Should().BeEquivalentTo(expectedValue, because);
+        }
+        
+        return (T)okResult.Value!;
+    }
+
+    /// <summary>
+    /// Asserts that an IActionResult is a BadRequestObjectResult with an error message.
+    /// </summary>
+    public static void AssertBadRequestResult(IActionResult result, string? expectedMessage = null, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Should().BeOfType<BadRequestObjectResult>(because);
+        var badRequestResult = result as BadRequestObjectResult;
+        
+        if (expectedMessage != null)
+        {
+            badRequestResult!.Value.Should().NotBeNull(because);
+            var errorValue = badRequestResult.Value?.ToString();
+            errorValue.Should().Contain(expectedMessage, because);
+        }
+    }
+
+    /// <summary>
+    /// Asserts that an IActionResult is an UnauthorizedObjectResult with an error message.
+    /// </summary>
+    public static void AssertUnauthorizedResult(IActionResult result, string? expectedMessage = null, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Should().BeOfType<UnauthorizedObjectResult>(because);
+        var unauthorizedResult = result as UnauthorizedObjectResult;
+        
+        if (expectedMessage != null)
+        {
+            unauthorizedResult!.Value.Should().NotBeNull(because);
+            var errorValue = unauthorizedResult.Value?.ToString();
+            errorValue.Should().Contain(expectedMessage, because);
+        }
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult is a NotFoundResult.
+    /// </summary>
+    public static void AssertNotFoundResult(ActionResult? result, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Should().BeOfType<NotFoundResult>(because);
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult has the expected status code.
+    /// </summary>
+    public static void AssertErrorResult(ActionResult? result, int expectedStatusCode, string? expectedMessage = null, string because = "")
+    {
+        result.Should().NotBeNull(because);
+        result.Should().BeOfType<ObjectResult>(because);
+        var objectResult = result as ObjectResult;
+        objectResult!.StatusCode.Should().Be(expectedStatusCode, because);
+        
+        if (expectedMessage != null)
+        {
+            objectResult.Value.Should().NotBeNull(because);
+            var errorValue = objectResult.Value?.ToString();
+            errorValue.Should().Contain(expectedMessage, because);
+        }
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult<T> is a BadRequestObjectResult with an error message.
+    /// </summary>
+    public static void AssertBadRequestResult<T>(ActionResult<T> result, string? expectedMessage = null, string because = "")
+    {
+        if (result.Result != null)
+        {
+            AssertBadRequestResult(result.Result, expectedMessage, because);
+        }
+        else
+        {
+            result.Should().NotBeNull(because);
+            result.Result.Should().NotBeNull(because);
+        }
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult<T> is an UnauthorizedObjectResult with an error message.
+    /// </summary>
+    public static void AssertUnauthorizedResult<T>(ActionResult<T> result, string? expectedMessage = null, string because = "")
+    {
+        if (result.Result != null)
+        {
+            AssertUnauthorizedResult(result.Result, expectedMessage, because);
+        }
+        else
+        {
+            result.Should().NotBeNull(because);
+            result.Result.Should().NotBeNull(because);
+        }
+    }
+
+    /// <summary>
+    /// Asserts that an ActionResult<T> is a NotFoundResult.
+    /// </summary>
+    public static void AssertNotFoundResult<T>(ActionResult<T> result, string because = "")
+    {
+        AssertNotFoundResult(result.Result, because);
+    }
+}
+
+/// <summary>
+/// HTTP client helpers for integration testing
+/// </summary>
+public static class HttpClientTestHelpers
+{
+    /// <summary>
+    /// Sets a Bearer token on the HttpClient's default request headers.
+    /// </summary>
+    public static void SetBearerToken(HttpClient client, string token)
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    /// <summary>
+    /// Asserts that an HTTP response has a success status code.
+    /// </summary>
+    public static void AssertSuccessResponse(HttpResponseMessage response, string because = "")
+    {
+        response.Should().NotBeNull(because);
+        response.IsSuccessStatusCode.Should().BeTrue($"Expected success status code but got {response.StatusCode}. {because}");
+    }
+
+    /// <summary>
+    /// Asserts that an HTTP response has the expected error status code.
+    /// </summary>
+    public static void AssertErrorResponse(HttpResponseMessage response, HttpStatusCode expectedStatus, string? expectedMessage = null, string because = "")
+    {
+        response.Should().NotBeNull(because);
+        response.StatusCode.Should().Be(expectedStatus, because);
+        
+        if (expectedMessage != null)
+        {
+            var content = response.Content.ReadAsStringAsync().Result;
+            content.Should().Contain(expectedMessage, because);
+        }
+    }
+
+    /// <summary>
+    /// Reads JSON content from an HTTP response and deserializes it.
+    /// </summary>
+    public static async Task<T?> ReadJsonAsync<T>(HttpResponseMessage response)
+    {
+        return await response.Content.ReadFromJsonAsync<T>();
+    }
+}
+
+/// <summary>
+/// Database assertion helpers
+/// </summary>
+public static class DatabaseAssertionUtilities
+{
+    /// <summary>
+    /// Asserts that an entity exists in the database with the given ID.
+    /// </summary>
+    public static async Task<T> AssertEntityExists<T>(AppDbContext context, object id, string because = "") where T : class
+    {
+        var entity = await context.Set<T>().FindAsync(id);
+        entity.Should().NotBeNull($"Entity of type {typeof(T).Name} with ID {id} should exist. {because}");
+        return entity!;
+    }
+
+    /// <summary>
+    /// Asserts that an entity does not exist in the database with the given ID.
+    /// </summary>
+    public static async Task AssertEntityDoesNotExist<T>(AppDbContext context, object id, string because = "") where T : class
+    {
+        var entity = await context.Set<T>().FindAsync(id);
+        entity.Should().BeNull($"Entity of type {typeof(T).Name} with ID {id} should not exist. {because}");
+    }
+
+    /// <summary>
+    /// Seeds the database with multiple entities of the same type.
+    /// </summary>
+    public static async Task<List<T>> SeedDatabase<T>(AppDbContext context, params T[] entities) where T : class
+    {
+        context.Set<T>().AddRange(entities);
+        await context.SaveChangesAsync();
+        return entities.ToList();
     }
 }
 

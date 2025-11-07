@@ -54,6 +54,7 @@ See `TestFixtures/TestTemplates.cs` for complete templates and examples.
   - `var user = GenericTestDataFactory.CreateUser();`
   - `var request = GenericTestDataFactory.CreateLoginRequest();`
   - `var pokemon = GenericTestDataFactory.CreateRandomPokemonDto();`
+  - For new entities: `var entity = GenericTestDataFactory.CreateEntityWithProperties<YourEntity>(e => { e.Name = "test"; });`
 
 ## Naming Conventions
 
@@ -94,17 +95,27 @@ public class UserRepositoryTests : RepositoryTestTemplate<IUserRepository, User,
 ```csharp
 public class PokemonServiceTests : ServiceTestTemplate<IPokemonService>
 {
+    private readonly Mock<IHttpClientFactory> _mockHttpClientFactory = new();
+
     protected override IPokemonService CreateService()
     {
-        // Setup service with mocked dependencies
+        var httpClient = new HttpClient();
+        return new PokemonService(httpClient);
     }
 
     [Fact]
     public async Task GetRandomPokemonAsync_ValidResponse_ReturnsPokemon()
     {
         // Arrange
+        var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
+        // Setup mocks...
+
         // Act
-        // Assert pattern
+        var result = await Service.GetRandomPokemonAsync();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedPokemon);
     }
 }
 ```
@@ -114,24 +125,28 @@ public class PokemonServiceTests : ServiceTestTemplate<IPokemonService>
 ```csharp
 public class PokemonControllerTests : ControllerTestTemplate<PokemonController>
 {
+    private readonly Mock<IPokemonService> _mockService = new();
+
     protected override PokemonController CreateController()
     {
-        // Setup controller with mocked dependencies
+        return new PokemonController(_mockService.Object);
     }
 
     [Fact]
     public async Task Get_ValidRequest_ReturnsPokemon()
     {
         // Arrange
-        var pokemon = new RandomPokemonDto { /* ... */ };
+        var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
         _mockService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(pokemon);
+            .ReturnsAsync(expectedPokemon);
 
         // Act
-        var result = await _controller.Get(CancellationToken.None);
+        var result = await Controller.Get(CancellationToken.None);
 
         // Assert
-        AssertActionResult<RandomPokemonDto>(result, 200);
+        var response = ControllerAssertionUtilities.AssertOkResult<RandomPokemonDto>(result);
+        response.Should().BeEquivalentTo(expectedPokemon);
+        _mockService.Verify(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
 ```
@@ -232,33 +247,40 @@ actualUser.Email.Should().Be(expectedUser.Email, "Email should match");
 
 ### Database Operations
 ```csharp
-// Using the TestBase methods
-await AddEntityAsync(new User { /* properties */ });
+// Using the TestBase methods (inherited from RepositoryTestTemplate or TestBase)
+await AddEntityAsync(GenericTestDataFactory.CreateUser());
 
 // Using generic methods
-await AddEntityAsync<Pokemon>(new Pokemon { /* properties */ });
+await AddEntityAsync<Pokemon>(GenericTestDataFactory.CreateEntityWithProperties<Pokemon>(p => { p.Name = "test"; }));
 await ClearEntitiesAsync<User>();
+
+// Verify entity exists
+var user = await GetEntityAsync<User>(1);
+user.Should().NotBeNull();
 ```
 
 ## Integration Testing
 
 ### WebApplicationFactory Usage
 ```csharp
-public class IntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+public class IntegrationTests : IntegrationTestTemplate
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
-
-    public IntegrationTests(WebApplicationFactory<Program> factory)
-    {
-        _factory = factory;
-        _client = _factory.CreateClient();
-    }
+    public IntegrationTests(WebApplicationFactory<Program> factory) 
+        : base(factory) { }
 
     [Fact]
     public async Task CompleteFlow_WorksCorrectly()
     {
-        // Test complete user flows
+        // Arrange
+        var request = GenericTestDataFactory.CreateYourRequest();
+
+        // Act
+        var response = await Client.PostAsJsonAsync("/api/endpoint", request);
+
+        // Assert
+        AssertSuccessResponse(response);
+        var data = await HttpClientTestHelpers.ReadJsonAsync<ResponseType>(response);
+        data.Should().NotBeNull();
     }
 }
 ```
@@ -266,15 +288,19 @@ public class IntegrationTests : IClassFixture<WebApplicationFactory<Program>>
 ### HTTP Testing
 
 ```csharp
-// Setting authentication
-_client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+// Setting authentication using template helper
+SetBearerToken(token);
 
 // Making requests
-var response = await _client.GetAsync("/api/endpoint");
-response.EnsureSuccessStatusCode();
+var response = await Client.GetAsync("/api/endpoint");
 
-// Reading JSON responses
-var data = await response.Content.ReadFromJsonAsync<ResponseType>();
+// Asserting responses using template helpers
+AssertSuccessResponse(response);
+// or
+AssertErrorResponse(response, HttpStatusCode.BadRequest, "expected error message");
+
+// Reading JSON responses using helper
+var data = await HttpClientTestHelpers.ReadJsonAsync<ResponseType>(response);
 data.Should().NotBeNull();
 ```
 
@@ -426,62 +452,94 @@ public async Task GetByIdAsync_ExistingUser_ReturnsUser()
 
 ### Service Test Example
 ```csharp
-[Fact]
-public async Task GetRandomPokemonAsync_ValidResponse_ReturnsPokemon()
+public class AuthServiceTests : ServiceTestTemplate<IAuthService>
 {
-    // Arrange
-    var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
-    _mockService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
-        .ReturnsAsync(expectedPokemon);
+    private readonly Mock<IUserRepository> _mockUserRepository = new();
 
-    // Act
-    var result = await _service.GetRandomPokemonAsync();
+    protected override IAuthService CreateService()
+    {
+        return new AuthService(_mockUserRepository.Object, /* other dependencies */);
+    }
 
-    // Assert
-    result.Should().Be(expectedPokemon);
+    [Fact]
+    public async Task RegisterAsync_ValidRequest_ReturnsSuccess()
+    {
+        // Arrange
+        var request = GenericTestDataFactory.CreateRegisterRequest();
+        var expectedUser = GenericTestDataFactory.CreateUser();
+        _mockUserRepository.Setup(x => x.GetByUsernameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User?)null);
+        _mockUserRepository.Setup(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedUser);
+
+        // Act
+        var result = await Service.RegisterAsync(request, CancellationToken.None);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Token.Should().NotBeNullOrEmpty();
+        _mockUserRepository.Verify(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
 ```
 
 ### Controller Test Example
 ```csharp
-[Fact]
-public async Task Get_ValidRequest_ReturnsPokemon()
+public class PokemonControllerTests : ControllerTestTemplate<PokemonController>
 {
-    // Arrange
-    var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
-    _mockService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
-        .ReturnsAsync(expectedPokemon);
+    private readonly Mock<IPokemonService> _mockService = new();
 
-    // Act
-    var result = await _controller.Get(CancellationToken.None);
+    protected override PokemonController CreateController()
+    {
+        return new PokemonController(_mockService.Object);
+    }
 
-    // Assert
-    result.Should().BeOfType<ActionResult<RandomPokemonDto>>();
-    var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-    var pokemon = okResult.Value.Should().BeOfType<RandomPokemonDto>().Subject;
-    pokemon.Should().BeEquivalentTo(expectedPokemon);
+    [Fact]
+    public async Task Get_ValidRequest_ReturnsPokemon()
+    {
+        // Arrange
+        var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
+        _mockService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedPokemon);
+
+        // Act
+        var result = await Controller.Get(CancellationToken.None);
+
+        // Assert
+        var response = ControllerAssertionUtilities.AssertOkResult<RandomPokemonDto>(result);
+        response.Should().BeEquivalentTo(expectedPokemon);
+        _mockService.Verify(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
 ```
 
 ### Integration Test Example
 ```csharp
-[Fact]
-public async Task CompleteAuthenticationFlow_WorksCorrectly()
+public class AuthenticationIntegrationTests : IntegrationTestTemplate
 {
-    // Arrange
-    var client = _factory.CreateClient();
-    var loginRequest = GenericTestDataFactory.CreateLoginRequest();
+    public AuthenticationIntegrationTests(WebApplicationFactory<Program> factory) 
+        : base(factory) { }
 
-    // Act
-    var loginResponse = await client.PostAsJsonAsync("/Auth/login", loginRequest);
-    var token = loginResponse.Data.token;
+    [Fact]
+    public async Task CompleteAuthenticationFlow_WorksCorrectly()
+    {
+        // Arrange
+        var registerRequest = GenericTestDataFactory.CreateRegisterRequest();
 
-    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    var meResponse = await client.GetAsync("/Auth/me");
+        // Act
+        var registerResponse = await Client.PostAsJsonAsync("/Auth/register", registerRequest);
+        AssertSuccessResponse(registerResponse);
+        
+        var authResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(registerResponse);
+        SetBearerToken(authResult!.Token);
 
-    // Assert
-    loginResponse.EnsureSuccessStatusCode();
-    meResponse.EnsureSuccessStatusCode();
+        var meResponse = await Client.GetAsync("/Auth/me");
+        AssertSuccessResponse(meResponse);
+
+        // Assert
+        var currentUser = await HttpClientTestHelpers.ReadJsonAsync<CurrentUserResponse>(meResponse);
+        currentUser.Should().NotBeNull();
+    }
 }
 ```
 
@@ -510,14 +568,53 @@ public static YourEntity CreateYourEntity(int id = 1, string name = "test")
     return new YourEntity { Id = id, Name = name };
 }
 
-// 2. Create service test
+// 2. Create service test using template
 public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
 {
+    private readonly Mock<IYourRepository> _mockRepository = new();
+    
     protected override IYourFeatureService CreateService() => 
-        new YourFeatureService(MockRepo.Object);
+        new YourFeatureService(_mockRepository.Object);
     
     [Fact]
-    public async Task YourMethod_ValidInput_ReturnsExpected() { /* implementation */ }
+    public async Task YourMethod_ValidInput_ReturnsExpected() 
+    { 
+        // Arrange
+        var input = GenericTestDataFactory.CreateYourRequest();
+        var expected = GenericTestDataFactory.CreateYourEntity();
+        _mockRepository.Setup(x => x.GetAsync(1)).ReturnsAsync(expected);
+        
+        // Act
+        var result = await Service.YourMethod(input);
+        
+        // Assert
+        result.Should().BeEquivalentTo(expected);
+    }
+}
+
+// 3. Create controller test using template
+public class YourFeatureControllerTests : ControllerTestTemplate<YourFeatureController>
+{
+    private readonly Mock<IYourFeatureService> _mockService = new();
+    
+    protected override YourFeatureController CreateController() => 
+        new YourFeatureController(_mockService.Object);
+    
+    [Fact]
+    public async Task Get_ValidId_ReturnsOk()
+    {
+        // Arrange
+        var expected = GenericTestDataFactory.CreateYourEntity();
+        _mockService.Setup(x => x.GetByIdAsync(1)).ReturnsAsync(expected);
+        
+        // Act
+        var result = await Controller.Get(1);
+        
+        // Assert
+        var response = ControllerAssertionUtilities.AssertOkResult<YourEntity>(result);
+        response.Should().BeEquivalentTo(expected);
+        _mockService.Verify(x => x.GetByIdAsync(1), Times.Once);
+    }
 }
 ```
 

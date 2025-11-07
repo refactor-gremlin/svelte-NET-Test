@@ -60,18 +60,4 @@ public abstract class TestBase : IAsyncLifetime
         DbContext.Set<T>().RemoveRange(DbContext.Set<T>());
         await DbContext.SaveChangesAsync();
     }
-
-    // Specific User methods (keeping for backward compatibility)
-    protected async Task<User> CreateTestUserAsync(string username = "testuser", string email = "test@example.com")
-    {
-        var user = new User
-        {
-            Username = username,
-            Email = email,
-            PasswordHash = "testhash",
-            PasswordSalt = "testsalt"
-        };
-
-        return await AddEntityAsync(user);
-    }
 }

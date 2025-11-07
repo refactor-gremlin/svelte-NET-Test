@@ -25,7 +25,7 @@ MySvelteApp.Server.Tests/
 Add methods to `GenericTestDataFactory.cs`:
 
 ```csharp
-// Add your entity factory
+// For entities, use the generic method or add a specific factory:
 public static YourEntity CreateYourEntity(
     int id = 1,
     string name = "test-name")
@@ -37,7 +37,7 @@ public static YourEntity CreateYourEntity(
     };
 }
 
-// Add your DTO factory  
+// For DTOs, add specific factory methods:
 public static YourRequest CreateYourRequest(
     string name = "test-name")
 {
@@ -46,6 +46,13 @@ public static YourRequest CreateYourRequest(
         Name = name
     };
 }
+
+// Or use the generic method for simple cases:
+var entity = GenericTestDataFactory.CreateEntityWithProperties<YourEntity>(e => 
+{
+    e.Id = 1;
+    e.Name = "test";
+});
 ```
 
 ### 3. Create Service Tests
@@ -54,17 +61,16 @@ Use the `ServiceTestTemplate<TService>` template:
 ```csharp
 public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
 {
+    private readonly Mock<IYourRepository> _mockRepository = new();
+    private readonly Mock<ILogger<YourFeatureService>> _mockLogger = new();
+
     protected override IYourFeatureService CreateService()
     {
         return new YourFeatureService(
-            // Inject your dependencies
-            MockRepository.Object,
-            MockLogger.Object
+            _mockRepository.Object,
+            _mockLogger.Object
         );
     }
-
-    private readonly Mock<IYourRepository> MockRepository = new();
-    private readonly Mock<ILogger<YourFeatureService>> MockLogger = new();
 
     [Fact]
     public async Task YourMethod_ValidInput_ReturnsExpectedResult()
@@ -73,15 +79,15 @@ public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
         var input = GenericTestDataFactory.CreateYourRequest();
         var expected = GenericTestDataFactory.CreateYourEntity();
         
-        MockRepository.Setup(x => x.GetByIdAsync(input.Id))
+        _mockRepository.Setup(x => x.GetByIdAsync(input.Id))
             .ReturnsAsync(expected);
 
         // Act
         var result = await Service.YourMethod(input);
 
         // Assert
-        result.Should().Be(expected);
-        MockRepository.Verify(x => x.GetByIdAsync(input.Id), Times.Once);
+        result.Should().BeEquivalentTo(expected);
+        _mockRepository.Verify(x => x.GetByIdAsync(input.Id), Times.Once);
     }
 }
 ```
@@ -92,29 +98,43 @@ Use the `ControllerTestTemplate<TController>` template:
 ```csharp
 public class YourFeatureControllerTests : ControllerTestTemplate<YourFeatureController>
 {
+    private readonly Mock<IYourFeatureService> _mockService = new();
+
     protected override YourFeatureController CreateController()
     {
-        return new YourFeatureController(MockService.Object);
+        return new YourFeatureController(_mockService.Object);
     }
-
-    private readonly Mock<IYourFeatureService> MockService = new();
 
     [Fact]
     public async Task Get_ValidId_ReturnsOkResult()
     {
         // Arrange
         var expected = GenericTestDataFactory.CreateYourEntity();
-        MockService.Setup(x => x.GetByIdAsync(1))
+        _mockService.Setup(x => x.GetByIdAsync(1))
             .ReturnsAsync(expected);
 
         // Act
         var result = await Controller.Get(1);
 
         // Assert
-        result.Should().BeOfType<ActionResult<YourEntity>>();
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var entity = okResult.Value.Should().BeOfType<YourEntity>().Subject;
-        entity.Should().BeEquivalentTo(expected);
+        var response = ControllerAssertionUtilities.AssertOkResult<YourEntity>(result);
+        response.Should().BeEquivalentTo(expected);
+        _mockService.Verify(x => x.GetByIdAsync(1), Times.Once);
+    }
+
+    [Fact]
+    public async Task Get_Unauthorized_ReturnsUnauthorized()
+    {
+        // Arrange
+        SetupAuthenticatedUser(userId: 1); // For authenticated endpoints
+        _mockService.Setup(x => x.GetByIdAsync(1))
+            .ReturnsAsync((YourEntity?)null);
+
+        // Act
+        var result = await Controller.Get(1);
+
+        // Assert
+        ControllerAssertionUtilities.AssertNotFoundResult(result);
     }
 }
 ```
@@ -131,18 +151,34 @@ public class YourFeatureRepositoryTests : RepositoryTestTemplate<IYourRepository
     }
 
     [Fact]
+    public async Task GetByIdAsync_ExistingId_ReturnsEntity()
+    {
+        // Arrange
+        var expected = GenericTestDataFactory.CreateYourEntity(id: 1);
+        await AddEntityAsync(expected);
+
+        // Act
+        var result = await Repository.GetByIdAsync(1);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(1);
+        result.Should().BeEquivalentTo(expected);
+    }
+
+    [Fact]
     public async Task AddAsync_ValidEntity_ReturnsEntity()
     {
         // Arrange
         var entity = GenericTestDataFactory.CreateYourEntity();
-        var repository = CreateRepository();
 
         // Act
-        var result = await repository.AddAsync(entity);
+        var result = await Repository.AddAsync(entity);
 
         // Assert
         result.Should().Be(entity);
-        DbContext.Set<YourEntity>().Should().Contain(entity);
+        var saved = await GetEntityAsync<YourEntity>(entity.Id);
+        saved.Should().NotBeNull();
     }
 }
 ```
@@ -166,9 +202,26 @@ public class YourFeatureIntegrationTests : IntegrationTestTemplate
         var response = await Client.PostAsJsonAsync("/api/yourfeature", request);
 
         // Assert
-        response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<YourResponse>();
+        AssertSuccessResponse(response);
+        var result = await HttpClientTestHelpers.ReadJsonAsync<YourResponse>(response);
         result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Get_WithAuthentication_ReturnsData()
+    {
+        // Arrange
+        var registerRequest = GenericTestDataFactory.CreateRegisterRequest();
+        var registerResponse = await Client.PostAsJsonAsync("/Auth/register", registerRequest);
+        var authResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(registerResponse);
+        
+        SetBearerToken(authResult!.Token);
+
+        // Act
+        var response = await Client.GetAsync("/api/yourfeature");
+
+        // Assert
+        AssertSuccessResponse(response);
     }
 }
 ```

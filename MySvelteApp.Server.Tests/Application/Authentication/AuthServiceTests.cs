@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Moq;
 using FluentAssertions;
 using MySvelteApp.Server.Application.Authentication;
@@ -9,22 +8,22 @@ using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Application.Authentication;
 
-public class AuthServiceTests : IClassFixture<DatabaseFixture>
+public class AuthServiceTests : ServiceTestTemplate<IAuthService>
 {
-    private readonly DatabaseFixture _fixture;
     private readonly Mock<IUserRepository> _mockUserRepository;
     private readonly Mock<IPasswordHasher> _mockPasswordHasher;
     private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator;
-    private readonly AuthService _authService;
 
-    public AuthServiceTests(DatabaseFixture fixture)
+    public AuthServiceTests()
     {
-        _fixture = fixture;
         _mockUserRepository = new Mock<IUserRepository>();
         _mockPasswordHasher = new Mock<IPasswordHasher>();
         _mockJwtTokenGenerator = new Mock<IJwtTokenGenerator>();
+    }
 
-        _authService = new AuthService(
+    protected override IAuthService CreateService()
+    {
+        return new AuthService(
             _mockUserRepository.Object,
             _mockPasswordHasher.Object,
             _mockJwtTokenGenerator.Object);
@@ -50,7 +49,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .Returns(token);
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -64,13 +63,13 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     [InlineData("")]
     [InlineData("ab")]
     [InlineData("invalid username!")]
-    public async Task RegisterAsync_InvalidUsername_ReturnsValidationError(string username)
+    public async Task RegisterAsync_InvalidUsername_ReturnsValidationError(string? username)
     {
         // Arrange
-        var request = GenericTestDataFactory.CreateRegisterRequest(username: username);
+        var request = GenericTestDataFactory.CreateRegisterRequest(username: username ?? "");
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -84,13 +83,13 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     [InlineData("invalid-email")]
     [InlineData("email@")]
     [InlineData("@example.com")]
-    public async Task RegisterAsync_InvalidEmail_ReturnsValidationError(string email)
+    public async Task RegisterAsync_InvalidEmail_ReturnsValidationError(string? email)
     {
         // Arrange
-        var request = GenericTestDataFactory.CreateRegisterRequest(email: email);
+        var request = GenericTestDataFactory.CreateRegisterRequest(email: email ?? "");
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -105,13 +104,13 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     [InlineData("password")]
     [InlineData("PASSWORD")]
     [InlineData("12345678")]
-    public async Task RegisterAsync_InvalidPassword_ReturnsValidationError(string password)
+    public async Task RegisterAsync_InvalidPassword_ReturnsValidationError(string? password)
     {
         // Arrange
-        var request = GenericTestDataFactory.CreateRegisterRequest(password: password);
+        var request = GenericTestDataFactory.CreateRegisterRequest(password: password ?? "");
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -129,7 +128,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .ReturnsAsync(true);
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -149,7 +148,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .ReturnsAsync(true);
 
         // Act
-        var result = await _authService.RegisterAsync(request);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -173,7 +172,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .Returns(token);
 
         // Act
-        var result = await _authService.LoginAsync(request);
+        var result = await Service.LoginAsync(request);
 
         // Assert
         result.Success.Should().BeTrue();
@@ -192,7 +191,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .ReturnsAsync((User?)null);
 
         // Act
-        var result = await _authService.LoginAsync(request);
+        var result = await Service.LoginAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -213,7 +212,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .Returns(false);
 
         // Act
-        var result = await _authService.LoginAsync(request);
+        var result = await Service.LoginAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -225,13 +224,13 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task LoginAsync_MissingUsername_ReturnsValidationError(string username)
+    public async Task LoginAsync_MissingUsername_ReturnsValidationError(string? username)
     {
         // Arrange
-        var request = GenericTestDataFactory.CreateLoginRequest(username: username);
+        var request = GenericTestDataFactory.CreateLoginRequest(username: username ?? "");
 
         // Act
-        var result = await _authService.LoginAsync(request);
+        var result = await Service.LoginAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -243,13 +242,13 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task LoginAsync_MissingPassword_ReturnsValidationError(string password)
+    public async Task LoginAsync_MissingPassword_ReturnsValidationError(string? password)
     {
         // Arrange
-        var request = GenericTestDataFactory.CreateLoginRequest(password: password);
+        var request = GenericTestDataFactory.CreateLoginRequest(password: password ?? "");
 
         // Act
-        var result = await _authService.LoginAsync(request);
+        var result = await Service.LoginAsync(request);
 
         // Assert
         result.Success.Should().BeFalse();
@@ -268,7 +267,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .ReturnsAsync(user);
 
         // Act
-        var result = await _authService.GetCurrentUserAsync(userId);
+        var result = await Service.GetCurrentUserAsync(userId);
 
         // Assert
         result.Should().NotBeNull();
@@ -287,7 +286,7 @@ public class AuthServiceTests : IClassFixture<DatabaseFixture>
             .ReturnsAsync((User?)null);
 
         // Act
-        var result = await _authService.GetCurrentUserAsync(userId);
+        var result = await Service.GetCurrentUserAsync(userId);
 
         // Assert
         result.Should().BeNull();

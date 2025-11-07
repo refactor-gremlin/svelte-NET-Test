@@ -1,100 +1,50 @@
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using FluentAssertions;
-using MySvelteApp.Server.Infrastructure.Persistence;
 using MySvelteApp.Server.Application.Authentication.DTOs;
 using MySvelteApp.Server.Presentation.Models.Auth;
+using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Integration;
 
-public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactory<Program>>, IDisposable
+public class AuthenticationIntegrationTests : IntegrationTestTemplate
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly IServiceScope _scope;
-    private readonly AppDbContext _dbContext;
-
-    public AuthenticationIntegrationTests(WebApplicationFactory<Program> factory)
-    {
-        _factory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                // Remove the existing DbContext registration
-                var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
-
-                // Add in-memory database for testing
-                services.AddDbContext<AppDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase("TestDb");
-                });
-            });
-        });
-
-        _scope = _factory.Services.CreateScope();
-        _dbContext = _scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        _dbContext.Database.EnsureCreated();
-    }
-
-    public void Dispose()
-    {
-        _dbContext.Database.EnsureDeleted();
-        _dbContext.Dispose();
-        _scope.Dispose();
-        _factory.Dispose();
-    }
+    public AuthenticationIntegrationTests(WebApplicationFactory<Program> factory) 
+        : base(factory) { }
 
     [Fact]
     public async Task CompleteAuthenticationFlow_RegisterLoginGetCurrentUser_WorksCorrectly()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var registerRequest = new RegisterRequest
-        {
-            Username = "testuser",
-            Email = "test@example.com",
-            Password = "Password123"
-        };
+        var registerRequest = GenericTestDataFactory.CreateRegisterRequest();
 
         // Act 1: Register a new user
-        var registerResponse = await client.PostAsJsonAsync("/Auth/register", registerRequest);
-        registerResponse.EnsureSuccessStatusCode();
+        var registerResponse = await Client.PostAsJsonAsync("/Auth/register", registerRequest);
+        AssertSuccessResponse(registerResponse);
         
-        var registerResult = await registerResponse.Content.ReadFromJsonAsync<AuthSuccessResponse>();
+        var registerResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(registerResponse);
         registerResult.Should().NotBeNull();
         registerResult!.Token.Should().NotBeNullOrEmpty();
         registerResult.Username.Should().Be("testuser");
         registerResult.UserId.Should().BeGreaterThan(0);
 
         // Act 2: Login with the registered user
-        var loginRequest = new LoginRequest
-        {
-            Username = "testuser",
-            Password = "Password123"
-        };
+        var loginRequest = GenericTestDataFactory.CreateLoginRequest();
 
-        var loginResponse = await client.PostAsJsonAsync("/Auth/login", loginRequest);
-        loginResponse.EnsureSuccessStatusCode();
+        var loginResponse = await Client.PostAsJsonAsync("/Auth/login", loginRequest);
+        AssertSuccessResponse(loginResponse);
 
-        var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthSuccessResponse>();
+        var loginResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(loginResponse);
         loginResult.Should().NotBeNull();
         loginResult!.Token.Should().NotBeNullOrEmpty();
         loginResult.Username.Should().Be("testuser");
 
         // Act 3: Get current user with the token
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginResult.Token);
-        var meResponse = await client.GetAsync("/Auth/me");
-        meResponse.EnsureSuccessStatusCode();
+        SetBearerToken(loginResult.Token);
+        var meResponse = await Client.GetAsync("/Auth/me");
+        AssertSuccessResponse(meResponse);
 
-        var currentUser = await meResponse.Content.ReadFromJsonAsync<CurrentUserResponse>();
+        var currentUser = await HttpClientTestHelpers.ReadJsonAsync<CurrentUserResponse>(meResponse);
         currentUser.Should().NotBeNull();
         currentUser!.User.Should().NotBeNull();
         currentUser.User.Username.Should().Be("testuser");
@@ -106,30 +56,23 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task Register_WithDuplicateUsername_ReturnsBadRequest()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var registerRequest1 = new RegisterRequest
-        {
-            Username = "testuser",
-            Email = "test1@example.com",
-            Password = "Password123"
-        };
-        var registerRequest2 = new RegisterRequest
-        {
-            Username = "testuser", // Same username
-            Email = "test2@example.com",
-            Password = "Password456"
-        };
+        var registerRequest1 = GenericTestDataFactory.CreateRegisterRequest(
+            username: "testuser",
+            email: "test1@example.com");
+        var registerRequest2 = GenericTestDataFactory.CreateRegisterRequest(
+            username: "testuser", // Same username
+            email: "test2@example.com");
 
         // Act 1: First registration should succeed
-        var response1 = await client.PostAsJsonAsync("/Auth/register", registerRequest1);
-        response1.EnsureSuccessStatusCode();
+        var response1 = await Client.PostAsJsonAsync("/Auth/register", registerRequest1);
+        AssertSuccessResponse(response1);
 
         // Act 2: Second registration with same username should fail
-        var response2 = await client.PostAsJsonAsync("/Auth/register", registerRequest2);
+        var response2 = await Client.PostAsJsonAsync("/Auth/register", registerRequest2);
 
         // Assert
-        response2.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        var errorResponse = await response2.Content.ReadFromJsonAsync<AuthErrorResponse>();
+        AssertErrorResponse(response2, System.Net.HttpStatusCode.BadRequest, "username is already taken");
+        var errorResponse = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response2);
         errorResponse.Should().NotBeNull();
         errorResponse!.Message.Should().Contain("username is already taken");
     }
@@ -138,30 +81,23 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task Register_WithDuplicateEmail_ReturnsBadRequest()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var registerRequest1 = new RegisterRequest
-        {
-            Username = "user1",
-            Email = "test@example.com",
-            Password = "Password123"
-        };
-        var registerRequest2 = new RegisterRequest
-        {
-            Username = "user2",
-            Email = "test@example.com", // Same email
-            Password = "Password456"
-        };
+        var registerRequest1 = GenericTestDataFactory.CreateRegisterRequest(
+            username: "user1",
+            email: "test@example.com");
+        var registerRequest2 = GenericTestDataFactory.CreateRegisterRequest(
+            username: "user2",
+            email: "test@example.com"); // Same email
 
         // Act 1: First registration should succeed
-        var response1 = await client.PostAsJsonAsync("/Auth/register", registerRequest1);
-        response1.EnsureSuccessStatusCode();
+        var response1 = await Client.PostAsJsonAsync("/Auth/register", registerRequest1);
+        AssertSuccessResponse(response1);
 
         // Act 2: Second registration with same email should fail
-        var response2 = await client.PostAsJsonAsync("/Auth/register", registerRequest2);
+        var response2 = await Client.PostAsJsonAsync("/Auth/register", registerRequest2);
 
         // Assert
-        response2.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        var errorResponse = await response2.Content.ReadFromJsonAsync<AuthErrorResponse>();
+        AssertErrorResponse(response2, System.Net.HttpStatusCode.BadRequest, "email is already registered");
+        var errorResponse = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response2);
         errorResponse.Should().NotBeNull();
         errorResponse!.Message.Should().Contain("email is already registered");
     }
@@ -170,19 +106,16 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task Login_WithInvalidCredentials_ReturnsUnauthorized()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var loginRequest = new LoginRequest
-        {
-            Username = "nonexistentuser",
-            Password = "wrongpassword"
-        };
+        var loginRequest = GenericTestDataFactory.CreateLoginRequest(
+            username: "nonexistentuser",
+            password: "wrongpassword");
 
         // Act
-        var response = await client.PostAsJsonAsync("/Auth/login", loginRequest);
+        var response = await Client.PostAsJsonAsync("/Auth/login", loginRequest);
 
         // Assert
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
-        var errorResponse = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+        AssertErrorResponse(response, System.Net.HttpStatusCode.Unauthorized, "Invalid username or password");
+        var errorResponse = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response);
         errorResponse.Should().NotBeNull();
         errorResponse!.Message.Should().Contain("Invalid username or password");
     }
@@ -190,28 +123,26 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     [Fact]
     public async Task GetCurrentUser_WithoutToken_ReturnsUnauthorized()
     {
-        // Arrange
-        var client = _factory.CreateClient();
+        // Arrange - Client has no token
 
         // Act
-        var response = await client.GetAsync("/Auth/me");
+        var response = await Client.GetAsync("/Auth/me");
 
         // Assert
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+        AssertErrorResponse(response, System.Net.HttpStatusCode.Unauthorized);
     }
 
     [Fact]
     public async Task GetCurrentUser_WithInvalidToken_ReturnsUnauthorized()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "invalid-token");
+        SetBearerToken("invalid-token");
 
         // Act
-        var response = await client.GetAsync("/Auth/me");
+        var response = await Client.GetAsync("/Auth/me");
 
         // Assert
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
+        AssertErrorResponse(response, System.Net.HttpStatusCode.Unauthorized);
     }
 
     [Theory]
@@ -227,20 +158,17 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task Register_WithInvalidData_ReturnsBadRequest(string username, string email, string password)
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var registerRequest = new RegisterRequest
-        {
-            Username = username,
-            Email = email,
-            Password = password
-        };
+        var registerRequest = GenericTestDataFactory.CreateRegisterRequest(
+            username: username,
+            email: email,
+            password: password);
 
         // Act
-        var response = await client.PostAsJsonAsync("/Auth/register", registerRequest);
+        var response = await Client.PostAsJsonAsync("/Auth/register", registerRequest);
 
         // Assert
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        var errorResponse = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+        AssertErrorResponse(response, System.Net.HttpStatusCode.BadRequest);
+        var errorResponse = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response);
         errorResponse.Should().NotBeNull();
         errorResponse!.Message.Should().NotBeNullOrEmpty();
     }
@@ -253,19 +181,16 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task Login_WithInvalidData_ReturnsBadRequest(string username, string password)
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var loginRequest = new LoginRequest
-        {
-            Username = username,
-            Password = password
-        };
+        var loginRequest = GenericTestDataFactory.CreateLoginRequest(
+            username: username,
+            password: password);
 
         // Act
-        var response = await client.PostAsJsonAsync("/Auth/login", loginRequest);
+        var response = await Client.PostAsJsonAsync("/Auth/login", loginRequest);
 
         // Assert
-        response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
-        var errorResponse = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+        AssertErrorResponse(response, System.Net.HttpStatusCode.BadRequest);
+        var errorResponse = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response);
         errorResponse.Should().NotBeNull();
         errorResponse!.Message.Should().NotBeNullOrEmpty();
     }
@@ -274,12 +199,11 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task MultipleUsers_RegisterAndLogin_WorksCorrectly()
     {
         // Arrange
-        var client = _factory.CreateClient();
         var users = new List<RegisterRequest>
         {
-            new() { Username = "user1", Email = "user1@example.com", Password = "Password123" },
-            new() { Username = "user2", Email = "user2@example.com", Password = "Password456" },
-            new() { Username = "user3", Email = "user3@example.com", Password = "Password789" }
+            GenericTestDataFactory.CreateRegisterRequest("user1", "user1@example.com", "Password123"),
+            GenericTestDataFactory.CreateRegisterRequest("user2", "user2@example.com", "Password456"),
+            GenericTestDataFactory.CreateRegisterRequest("user3", "user3@example.com", "Password789")
         };
 
         var tokens = new List<string>();
@@ -287,10 +211,10 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         // Act & Assert - Register all users
         foreach (var user in users)
         {
-            var registerResponse = await client.PostAsJsonAsync("/Auth/register", user);
-            registerResponse.EnsureSuccessStatusCode();
+            var registerResponse = await Client.PostAsJsonAsync("/Auth/register", user);
+            AssertSuccessResponse(registerResponse);
             
-            var registerResult = await registerResponse.Content.ReadFromJsonAsync<AuthSuccessResponse>();
+            var registerResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(registerResponse);
             registerResult.Should().NotBeNull();
             registerResult!.Token.Should().NotBeNullOrEmpty();
             tokens.Add(registerResult.Token);
@@ -299,16 +223,14 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         // Act & Assert - Login with each user
         for (int i = 0; i < users.Count; i++)
         {
-            var loginRequest = new LoginRequest
-            {
-                Username = users[i].Username,
-                Password = users[i].Password
-            };
+            var loginRequest = GenericTestDataFactory.CreateLoginRequest(
+                username: users[i].Username,
+                password: users[i].Password);
 
-            var loginResponse = await client.PostAsJsonAsync("/Auth/login", loginRequest);
-            loginResponse.EnsureSuccessStatusCode();
+            var loginResponse = await Client.PostAsJsonAsync("/Auth/login", loginRequest);
+            AssertSuccessResponse(loginResponse);
 
-            var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthSuccessResponse>();
+            var loginResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(loginResponse);
             loginResult.Should().NotBeNull();
             loginResult!.Token.Should().NotBeNullOrEmpty();
             loginResult.Username.Should().Be(users[i].Username);
@@ -319,28 +241,23 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     public async Task TokenValidation_MultipleRequests_WithSameToken_WorksCorrectly()
     {
         // Arrange
-        var client = _factory.CreateClient();
-        var registerRequest = new RegisterRequest
-        {
-            Username = "testuser",
-            Email = "test@example.com",
-            Password = "Password123"
-        };
+        var registerRequest = GenericTestDataFactory.CreateRegisterRequest();
 
         // Act 1: Register and get token
-        var registerResponse = await client.PostAsJsonAsync("/Auth/register", registerRequest);
-        var registerResult = await registerResponse.Content.ReadFromJsonAsync<AuthSuccessResponse>();
+        var registerResponse = await Client.PostAsJsonAsync("/Auth/register", registerRequest);
+        AssertSuccessResponse(registerResponse);
+        var registerResult = await HttpClientTestHelpers.ReadJsonAsync<AuthSuccessResponse>(registerResponse);
         var token = registerResult!.Token;
 
         // Act 2: Use the same token for multiple requests
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        SetBearerToken(token);
 
         for (int i = 0; i < 5; i++)
         {
-            var meResponse = await client.GetAsync("/Auth/me");
-            meResponse.EnsureSuccessStatusCode();
+            var meResponse = await Client.GetAsync("/Auth/me");
+            AssertSuccessResponse(meResponse);
 
-            var currentUser = await meResponse.Content.ReadFromJsonAsync<CurrentUserResponse>();
+            var currentUser = await HttpClientTestHelpers.ReadJsonAsync<CurrentUserResponse>(meResponse);
             currentUser.Should().NotBeNull();
             currentUser!.User.Username.Should().Be("testuser");
         }
