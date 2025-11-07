@@ -93,32 +93,54 @@ public class UserRepositoryTests : RepositoryTestTemplate<IUserRepository, User,
 ### Service Testing
 
 ```csharp
-public class PokemonServiceTests : ServiceTestTemplate<IPokemonService>
+public class AuthServiceTests : ServiceTestTemplate<IAuthService>
 {
-    private readonly Mock<IHttpClientFactory> _mockHttpClientFactory = new();
+    private readonly Mock<IUserRepository> _mockUserRepository = new();
+    private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
+    private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator = new();
+    private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
 
-    protected override IPokemonService CreateService()
+    protected override IAuthService CreateService()
     {
-        var httpClient = new HttpClient();
-        return new PokemonService(httpClient);
+        return new AuthService(
+            _mockUserRepository.Object,
+            _mockPasswordHasher.Object,
+            _mockJwtTokenGenerator.Object,
+            _mockUnitOfWork.Object);
     }
 
     [Fact]
-    public async Task GetRandomPokemonAsync_ValidResponse_ReturnsPokemon()
+    public async Task RegisterAsync_ValidRequest_ReturnsSuccess()
     {
         // Arrange
-        var expectedPokemon = GenericTestDataFactory.CreateRandomPokemonDto();
-        // Setup mocks...
+        var request = GenericTestDataFactory.CreateRegisterRequest();
+        var token = "test-token";
+        
+        _mockUserRepository.Setup(x => x.UsernameExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _mockUserRepository.Setup(x => x.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _mockPasswordHasher.Setup(x => x.HashPassword(It.IsAny<string>()))
+            .Returns(("hash", "salt"));
+        _mockUserRepository.Setup(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        _mockJwtTokenGenerator.Setup(x => x.GenerateToken(It.IsAny<User>()))
+            .Returns(token);
 
         // Act
-        var result = await Service.GetRandomPokemonAsync();
+        var result = await Service.RegisterAsync(request);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(expectedPokemon);
+        result.Success.Should().BeTrue();
+        result.Token.Should().Be(token);
+        _mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
 ```
+
+**Important**: Services that use repositories must also mock `IUnitOfWork` since repositories no longer call `SaveChangesAsync` directly.
 
 ### Controller Testing
 
@@ -151,12 +173,284 @@ public class PokemonControllerTests : ControllerTestTemplate<PokemonController>
 }
 ```
 
-## Mocking Guidelines
+## Testing with Unit of Work
+
+Services that perform database operations now use `IUnitOfWork` instead of calling `SaveChangesAsync` directly on repositories.
+
+### Mocking UnitOfWork
+
+```csharp
+private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
+
+// Setup
+_mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+    .ReturnsAsync(1); // Returns number of affected rows
+
+// Verify
+_mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+```
+
+### Testing Transactions
+
+```csharp
+[Fact]
+public async Task Service_MultipleOperations_UsesTransaction()
+{
+    // Arrange
+    await _mockUnitOfWork.Setup(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+        .Returns(Task.CompletedTask);
+    await _mockUnitOfWork.Setup(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()))
+        .Returns(Task.CompletedTask);
+
+    // Act
+    await Service.YourMethod();
+
+    // Assert
+    _mockUnitOfWork.Verify(x => x.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+    _mockUnitOfWork.Verify(x => x.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+}
+```
+
+## Testing Configuration Classes
+
+Configuration classes use `IOptions<T>` pattern. When testing services that depend on configuration:
+
+### Mocking IOptions<T>
+
+```csharp
+public class JwtTokenGeneratorTests
+{
+    private readonly Mock<IOptions<JwtSettings>> _mockJwtSettings = new();
+
+    public JwtTokenGeneratorTests()
+    {
+        var jwtSettings = new JwtSettings
+        {
+            Key = "test-key-that-is-long-enough",
+            Issuer = "test-issuer",
+            Audience = "test-audience",
+            ExpirationHours = 24
+        };
+        
+        _mockJwtSettings.Setup(x => x.Value).Returns(jwtSettings);
+    }
+
+    protected override IJwtTokenGenerator CreateService()
+    {
+        return new JwtTokenGenerator(_mockJwtSettings.Object);
+    }
+}
+```
+
+### Testing Configuration Validation
+
+Configuration classes are validated at startup. To test validation:
+
+```csharp
+[Fact]
+public void Configuration_MissingRequiredProperty_ThrowsValidationException()
+{
+    // Arrange
+    var services = new ServiceCollection();
+    var configuration = new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            { "Jwt:Issuer", "test" }
+            // Missing Jwt:Key
+        })
+        .Build();
+
+    // Act & Assert
+    services.Invoking(s => s.AddConfigurationSettings(configuration))
+        .Should().Throw<OptionsValidationException>();
+}
+```
+
+## Testing Validators
+
+FluentValidation validators can be tested independently:
+
+### Testing Validator Rules
+
+```csharp
+public class RegisterRequestValidatorTests
+{
+    private readonly RegisterRequestValidator _validator = new();
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ab")]
+    [InlineData("invalid username!")]
+    public void Validate_InvalidUsername_ReturnsValidationError(string username)
+    {
+        // Arrange
+        var request = new RegisterRequest { Username = username, Email = "test@example.com", Password = "Password123" };
+
+        // Act
+        var result = _validator.Validate(request);
+
+        // Assert
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Username");
+    }
+
+    [Fact]
+    public void Validate_ValidRequest_ReturnsSuccess()
+    {
+        // Arrange
+        var request = new RegisterRequest 
+        { 
+            Username = "validuser", 
+            Email = "test@example.com", 
+            Password = "Password123" 
+        };
+
+        // Act
+        var result = _validator.Validate(request);
+
+        // Assert
+        result.IsValid.Should().BeTrue();
+    }
+}
+```
+
+### Testing Validator Integration
+
+Validators are automatically applied via `ValidationFilter`. In integration tests, invalid requests should return 400 BadRequest:
+
+```csharp
+[Fact]
+public async Task Register_InvalidRequest_ReturnsBadRequest()
+{
+    // Arrange
+    var invalidRequest = new RegisterRequest 
+    { 
+        Username = "ab", // Too short
+        Email = "invalid-email",
+        Password = "123" // Too short
+    };
+
+    // Act
+    var response = await Client.PostAsJsonAsync("/Auth/register", invalidRequest);
+
+    // Assert
+    response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    var errors = await HttpClientTestHelpers.ReadJsonAsync<ValidationErrorResponse>(response);
+    errors.Should().NotBeNull();
+}
+```
+
+## Testing Health Checks
+
+Health checks implement `IHealthCheck` and can be tested directly:
+
+### Testing Health Check Implementation
+
+```csharp
+public class DatabaseHealthCheckTests
+{
+    [Fact]
+    public async Task CheckHealthAsync_DatabaseAvailable_ReturnsHealthy()
+    {
+        // Arrange
+        var dbContext = CreateTestDbContext();
+        var healthCheck = new DatabaseHealthCheck(dbContext);
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(
+            new HealthCheckContext(), 
+            CancellationToken.None);
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Description.Should().Contain("Database is available");
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_DatabaseUnavailable_ReturnsUnhealthy()
+    {
+        // Arrange
+        var dbContext = CreateUnavailableDbContext();
+        var healthCheck = new DatabaseHealthCheck(dbContext);
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(
+            new HealthCheckContext(), 
+            CancellationToken.None);
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+    }
+}
+```
+
+### Testing Health Check Endpoint
+
+```csharp
+[Fact]
+public async Task HealthCheck_AllServicesHealthy_ReturnsOk()
+{
+    // Act
+    var response = await Client.GetAsync("/health");
+
+    // Assert
+    response.StatusCode.Should().Be(HttpStatusCode.OK);
+    var healthReport = await HttpClientTestHelpers.ReadJsonAsync<HealthReport>(response);
+    healthReport.Status.Should().Be("Healthy");
+}
+```
+
+## Testing Exception Middleware
+
+The exception handling middleware catches unhandled exceptions. Test it via integration tests:
+
+### Testing Exception Handling
+
+```csharp
+[Fact]
+public async Task Endpoint_ThrowsException_ReturnsInternalServerError()
+{
+    // Arrange
+    _mockService.Setup(x => x.YourMethod())
+        .ThrowsAsync(new InvalidOperationException("Test error"));
+
+    // Act
+    var response = await Client.GetAsync("/api/endpoint");
+
+    // Assert
+    response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+    var error = await HttpClientTestHelpers.ReadJsonAsync<AuthErrorResponse>(response);
+    error.Message.Should().Contain("error occurred");
+}
+```
+
+### Testing Exception Mapping
+
+```csharp
+[Theory]
+[InlineData(typeof(ArgumentException), HttpStatusCode.BadRequest)]
+[InlineData(typeof(UnauthorizedAccessException), HttpStatusCode.Unauthorized)]
+[InlineData(typeof(InvalidOperationException), HttpStatusCode.BadRequest)]
+public async Task Middleware_MapsExceptionToStatusCode_Correctly(Type exceptionType, HttpStatusCode expectedStatus)
+{
+    // Arrange
+    var exception = (Exception)Activator.CreateInstance(exceptionType, "Test")!;
+    _mockService.Setup(x => x.YourMethod())
+        .ThrowsAsync(exception);
+
+    // Act
+    var response = await Client.GetAsync("/api/endpoint");
+
+    // Assert
+    response.StatusCode.Should().Be(expectedStatus);
+}
+```
 
 ### When to Mock
 - External dependencies (HTTP clients, file system, databases for unit tests)
 - Service interfaces
-- Configuration values
+- Configuration values (`IOptions<T>`)
+- UnitOfWork for transaction management
 - Time/clock for deterministic tests
 - External APIs and third-party services
 
@@ -199,6 +493,15 @@ If you must test external API integration:
 // Mocking a service
 var mockService = new Mock<IService>();
 mockService.Setup(x => x.Method(It.IsAny<ArgumentType>())).ReturnsAsync(expectedResult);
+
+// Mocking IUnitOfWork
+var mockUnitOfWork = new Mock<IUnitOfWork>();
+mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+    .ReturnsAsync(1);
+
+// Mocking IOptions<T> for configuration
+var mockOptions = new Mock<IOptions<JwtSettings>>();
+mockOptions.Setup(x => x.Value).Returns(new JwtSettings { Key = "test-key" });
 
 // Verifying mock calls
 mockService.Verify(x => x.Method(It.IsAny<ArgumentType>()), Times.Once);
@@ -455,10 +758,17 @@ public async Task GetByIdAsync_ExistingUser_ReturnsUser()
 public class AuthServiceTests : ServiceTestTemplate<IAuthService>
 {
     private readonly Mock<IUserRepository> _mockUserRepository = new();
+    private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
+    private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator = new();
+    private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
 
     protected override IAuthService CreateService()
     {
-        return new AuthService(_mockUserRepository.Object, /* other dependencies */);
+        return new AuthService(
+            _mockUserRepository.Object,
+            _mockPasswordHasher.Object,
+            _mockJwtTokenGenerator.Object,
+            _mockUnitOfWork.Object);
     }
 
     [Fact]
@@ -466,19 +776,28 @@ public class AuthServiceTests : ServiceTestTemplate<IAuthService>
     {
         // Arrange
         var request = GenericTestDataFactory.CreateRegisterRequest();
-        var expectedUser = GenericTestDataFactory.CreateUser();
-        _mockUserRepository.Setup(x => x.GetByUsernameAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        var token = "test-token";
+        
+        _mockUserRepository.Setup(x => x.UsernameExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _mockUserRepository.Setup(x => x.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _mockPasswordHasher.Setup(x => x.HashPassword(It.IsAny<string>()))
+            .Returns(("hash", "salt"));
         _mockUserRepository.Setup(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedUser);
+            .Returns(Task.CompletedTask);
+        _mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        _mockJwtTokenGenerator.Setup(x => x.GenerateToken(It.IsAny<User>()))
+            .Returns(token);
 
         // Act
-        var result = await Service.RegisterAsync(request, CancellationToken.None);
+        var result = await Service.RegisterAsync(request);
 
         // Assert
         result.Success.Should().BeTrue();
-        result.Token.Should().NotBeNullOrEmpty();
-        _mockUserRepository.Verify(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Once);
+        result.Token.Should().Be(token);
+        _mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
 ```

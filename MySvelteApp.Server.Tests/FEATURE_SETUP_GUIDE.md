@@ -58,16 +58,20 @@ var entity = GenericTestDataFactory.CreateEntityWithProperties<YourEntity>(e =>
 ### 3. Create Service Tests
 Use the `ServiceTestTemplate<TService>` template:
 
+**Important**: If your service uses repositories, you must also mock `IUnitOfWork`:
+
 ```csharp
 public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
 {
     private readonly Mock<IYourRepository> _mockRepository = new();
+    private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
     private readonly Mock<ILogger<YourFeatureService>> _mockLogger = new();
 
     protected override IYourFeatureService CreateService()
     {
         return new YourFeatureService(
             _mockRepository.Object,
+            _mockUnitOfWork.Object,
             _mockLogger.Object
         );
     }
@@ -81,6 +85,10 @@ public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
         
         _mockRepository.Setup(x => x.GetByIdAsync(input.Id))
             .ReturnsAsync(expected);
+        _mockRepository.Setup(x => x.AddAsync(It.IsAny<YourEntity>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
 
         // Act
         var result = await Service.YourMethod(input);
@@ -88,6 +96,7 @@ public class YourFeatureServiceTests : ServiceTestTemplate<IYourFeatureService>
         // Assert
         result.Should().BeEquivalentTo(expected);
         _mockRepository.Verify(x => x.GetByIdAsync(input.Id), Times.Once);
+        _mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
 ```
@@ -142,6 +151,8 @@ public class YourFeatureControllerTests : ControllerTestTemplate<YourFeatureCont
 ### 5. Create Repository Tests (if needed)
 Use the `RepositoryTestTemplate<TRepository, TEntity, TId>` template:
 
+**Note**: Repositories no longer call `SaveChangesAsync` directly. Use `IUnitOfWork` in services instead.
+
 ```csharp
 public class YourFeatureRepositoryTests : RepositoryTestTemplate<IYourRepository, YourEntity, int>
 {
@@ -167,18 +178,19 @@ public class YourFeatureRepositoryTests : RepositoryTestTemplate<IYourRepository
     }
 
     [Fact]
-    public async Task AddAsync_ValidEntity_ReturnsEntity()
+    public async Task AddAsync_ValidEntity_AddsToContext()
     {
         // Arrange
         var entity = GenericTestDataFactory.CreateYourEntity();
 
         // Act
-        var result = await Repository.AddAsync(entity);
+        await Repository.AddAsync(entity);
 
         // Assert
-        result.Should().Be(entity);
+        // Note: Entity is added to context but not saved
+        // Saving is handled by UnitOfWork in the service layer
         var saved = await GetEntityAsync<YourEntity>(entity.Id);
-        saved.Should().NotBeNull();
+        // Entity won't exist until UnitOfWork.SaveChangesAsync is called
     }
 }
 ```
@@ -222,6 +234,216 @@ public class YourFeatureIntegrationTests : IntegrationTestTemplate
 
         // Assert
         AssertSuccessResponse(response);
+    }
+}
+```
+
+## Adding Configuration Classes
+
+If your feature needs configuration settings:
+
+### 1. Create Configuration Class
+
+```csharp
+// In Infrastructure/Configuration/YourFeatureSettings.cs
+public class YourFeatureSettings
+{
+    public const string SectionName = "YourFeature";
+    
+    public string ApiKey { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
+    public int TimeoutSeconds { get; set; } = 30;
+}
+```
+
+### 2. Register Configuration
+
+Add to `Infrastructure/Configuration/ConfigurationExtensions.cs`:
+
+```csharp
+services.Configure<YourFeatureSettings>(configuration.GetSection(YourFeatureSettings.SectionName));
+```
+
+### 3. Add to appsettings.json
+
+```json
+{
+  "YourFeature": {
+    "ApiKey": "your-api-key",
+    "BaseUrl": "https://api.example.com",
+    "TimeoutSeconds": 30
+  }
+}
+```
+
+### 4. Test Configuration
+
+```csharp
+public class YourServiceTests
+{
+    private readonly Mock<IOptions<YourFeatureSettings>> _mockSettings = new();
+
+    public YourServiceTests()
+    {
+        var settings = new YourFeatureSettings
+        {
+            ApiKey = "test-key",
+            BaseUrl = "https://test.example.com",
+            TimeoutSeconds = 30
+        };
+        _mockSettings.Setup(x => x.Value).Returns(settings);
+    }
+}
+```
+
+## Adding Validators
+
+If your feature needs input validation:
+
+### 1. Create Validator
+
+```csharp
+// In Application/YourFeature/Validators/YourRequestValidator.cs
+public class YourRequestValidator : AbstractValidator<YourRequest>
+{
+    public YourRequestValidator()
+    {
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("Name is required.")
+            .MinimumLength(3).WithMessage("Name must be at least 3 characters long.");
+        
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("Please enter a valid email address.");
+    }
+}
+```
+
+### 2. Test Validator
+
+```csharp
+public class YourRequestValidatorTests
+{
+    private readonly YourRequestValidator _validator = new();
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ab")]
+    public void Validate_InvalidName_ReturnsValidationError(string name)
+    {
+        // Arrange
+        var request = new YourRequest { Name = name };
+
+        // Act
+        var result = _validator.Validate(request);
+
+        // Assert
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Name");
+    }
+}
+```
+
+Validators are automatically discovered and registered. Validation runs automatically via `ValidationFilter`.
+
+## Registering Services via Extensions
+
+Services are registered using extension methods in `Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`:
+
+### Application Services
+
+```csharp
+public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+{
+    services.AddScoped<IAuthService, AuthService>();
+    services.AddScoped<IYourFeatureService, YourFeatureService>(); // Add here
+    return services;
+}
+```
+
+### Infrastructure Services
+
+```csharp
+public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
+{
+    services.AddScoped<IUserRepository, UserRepository>();
+    services.AddScoped<IYourRepository, YourRepository>(); // Add here
+    services.AddScoped<IUnitOfWork, UnitOfWork>();
+    return services;
+}
+```
+
+## Adding Health Checks
+
+If your feature needs health monitoring:
+
+### 1. Create Health Check
+
+```csharp
+// In Infrastructure/HealthChecks/YourFeatureHealthCheck.cs
+public class YourFeatureHealthCheck : IHealthCheck
+{
+    private readonly IYourService _yourService;
+
+    public YourFeatureHealthCheck(IYourService yourService)
+    {
+        _yourService = yourService;
+    }
+
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Check your service
+            await _yourService.CheckHealthAsync(cancellationToken);
+            return HealthCheckResult.Healthy("Your feature is available.");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Your feature is not available.", ex);
+        }
+    }
+}
+```
+
+### 2. Register Health Check
+
+Add to `Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs`:
+
+```csharp
+public static IServiceCollection AddHealthCheckServices(this IServiceCollection services)
+{
+    services.AddHealthChecks()
+        .AddCheck<DatabaseHealthCheck>("database")
+        .AddCheck<YourFeatureHealthCheck>("your_feature"); // Add here
+    
+    return services;
+}
+```
+
+### 3. Test Health Check
+
+```csharp
+public class YourFeatureHealthCheckTests
+{
+    [Fact]
+    public async Task CheckHealthAsync_ServiceAvailable_ReturnsHealthy()
+    {
+        // Arrange
+        var mockService = new Mock<IYourService>();
+        mockService.Setup(x => x.CheckHealthAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var healthCheck = new YourFeatureHealthCheck(mockService.Object);
+
+        // Act
+        var result = await healthCheck.CheckHealthAsync(
+            new HealthCheckContext(), 
+            CancellationToken.None);
+
+        // Assert
+        result.Status.Should().Be(HealthStatus.Healthy);
     }
 }
 ```
@@ -295,7 +517,27 @@ dotnet test --collect:"XPlat Code Coverage"
 ## Need Help?
 
 Check existing tests in:
-- `Application/Authentication/` - Service layer examples
+- `Application/Authentication/` - Service layer examples with UnitOfWork
+- `Infrastructure/Authentication/JwtTokenGeneratorTests.cs` - Configuration testing example
 - `Presentation/Controllers/` - Controller examples  
 - `TestFixtures/TestTemplates.cs` - Template examples
 - `Integration/AuthenticationIntegrationTests.cs` - Integration examples
+
+## Quick Reference
+
+### Required Mocks for Services with Database Operations
+- `Mock<IYourRepository>` - Repository interface
+- `Mock<IUnitOfWork>` - Unit of Work (required!)
+- Other service dependencies
+
+### Required Mocks for Services with Configuration
+- `Mock<IOptions<YourSettings>>` - Configuration options
+- Other service dependencies
+
+### Service Registration Locations
+- Application services → `AddApplicationServices()`
+- Infrastructure services → `AddInfrastructureServices()`
+- Authentication → `AddAuthenticationServices()`
+- Database → `AddDatabaseServices()`
+- External APIs → `AddExternalServices()`
+- Health checks → `AddHealthCheckServices()`
