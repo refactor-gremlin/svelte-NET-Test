@@ -1,19 +1,7 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using MySvelteApp.Server.Application.Authentication;
-using MySvelteApp.Server.Application.Common.Interfaces;
-using MySvelteApp.Server.Application.Pokemon;
-
-using MySvelteApp.Server.Infrastructure.Authentication;
-using MySvelteApp.Server.Infrastructure.External;
-using MySvelteApp.Server.Infrastructure.Persistence;
-using MySvelteApp.Server.Infrastructure.Persistence.Repositories;
-using MySvelteApp.Server.Infrastructure.Security;
-
+using MySvelteApp.Server.Infrastructure.Configuration;
+using MySvelteApp.Server.Infrastructure.DependencyInjection;
+using MySvelteApp.Server.Presentation.Middleware;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -26,42 +14,41 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        const string WebsiteClientOrigin = "website_client";
+        // Register configuration settings
+        builder.Services.AddConfigurationSettings(builder.Configuration);
 
+        // Configure CORS
+        var corsSettings = builder.Configuration.GetCorsSettings();
+        const string WebsiteClientOrigin = "website_client";
         builder.Services.AddCors(options =>
         {
             options.AddPolicy(WebsiteClientOrigin, policy =>
             {
-                policy
-                    .WithOrigins("http://localhost:5173", "http://localhost:3000", "http://web:3000", "http://localhost:5173")
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials();
+                var origins = corsSettings.AllowedOrigins.Length > 0 
+                    ? corsSettings.AllowedOrigins 
+                    : new[] { "http://localhost:5173", "http://localhost:3000", "http://web:3000" };
+                
+                policy.WithOrigins(origins);
+                
+                if (corsSettings.AllowAnyHeader)
+                    policy.AllowAnyHeader();
+                if (corsSettings.AllowAnyMethod)
+                    policy.AllowAnyMethod();
+                if (corsSettings.AllowCredentials)
+                    policy.AllowCredentials();
             });
         });
 
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "your-issuer",
-                    ValidAudience = builder.Configuration["Jwt:Audience"] ?? "your-audience",
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "your-secret-key-here"))
-                };
-            });
+        // Register application services
+        builder.Services.AddApplicationServices();
+        builder.Services.AddInfrastructureServices();
+        builder.Services.AddAuthenticationServices(builder.Configuration);
+        builder.Services.AddDatabaseServices();
+        builder.Services.AddExternalServices();
+        builder.Services.AddPresentationServices();
+        builder.Services.AddHealthCheckServices();
 
-        builder.Services.AddAuthorizationBuilder()
-            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build());
-
-        builder.Services.AddControllers();
-
+        // Configure Swagger
         builder.Services.AddSwaggerGen(c =>
         {
             c.SwaggerDoc("v1", new OpenApiInfo { Title = "MySvelteApp.Server", Version = "v1" });
@@ -78,22 +65,22 @@ public class Program
 
             c.AddSecurityRequirement(new OpenApiSecurityRequirement
             {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
                 {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
                 }
-            },
-            Array.Empty<string>()
-        }
             });
         });
 
-        var promtailUrl = builder.Configuration["LOKI_PUSH_URL"] ?? "http://localhost:3101/loki/api/v1/push";
-        var apiServiceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "mysvelteapp-api";
+        // Configure logging
+        var loggingSettings = builder.Configuration.GetLoggingSettings();
         var environmentName = builder.Environment.EnvironmentName ?? "Development";
 
         builder.Host.UseSerilog((_, _, configuration) =>
@@ -101,43 +88,32 @@ public class Program
             configuration
                 .MinimumLevel.Information()
                 .Enrich.FromLogContext()
-                .Enrich.WithProperty("service", apiServiceName)
+                .Enrich.WithProperty("service", loggingSettings.OtelServiceName)
                 .Enrich.WithProperty("env", environmentName.ToLowerInvariant())
                 .WriteTo.Console()
-                .WriteTo.GrafanaLoki(promtailUrl);
+                .WriteTo.GrafanaLoki(loggingSettings.LokiPushUrl);
         });
 
-        var serviceName = apiServiceName;
-        var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4318/v1/traces";
-        var otlpProtocol = builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "http/protobuf";
-
+        // Configure OpenTelemetry
         builder.Services.AddOpenTelemetry().WithTracing(tracing =>
         {
             tracing
-                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
+                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(loggingSettings.OtelServiceName))
                 .AddAspNetCoreInstrumentation(options => { options.RecordException = true; })
                 .AddHttpClientInstrumentation()
                 .AddOtlpExporter(options =>
                 {
-                    options.Endpoint = new Uri(otlpEndpoint);
-                    options.Protocol = string.Equals(otlpProtocol, "grpc", StringComparison.OrdinalIgnoreCase)
+                    options.Endpoint = new Uri(loggingSettings.OtelExporterOtlpEndpoint);
+                    options.Protocol = string.Equals(loggingSettings.OtelExporterOtlpProtocol, "grpc", StringComparison.OrdinalIgnoreCase)
                         ? OtlpExportProtocol.Grpc
                         : OtlpExportProtocol.HttpProtobuf;
                 });
         });
 
-        builder.Services.AddDbContext<AppDbContext>(options =>
-            options.UseInMemoryDatabase("MySvelteAppDb"));
-
-        builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-        builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
-        builder.Services.AddScoped<IUserRepository, UserRepository>();
-        builder.Services.AddScoped<IAuthService, AuthService>();
-        builder.Services.AddHttpClient<IRandomPokemonService, PokeApiRandomPokemonService>();
-
-
         var app = builder.Build();
 
+        // Configure middleware pipeline
+        app.UseExceptionHandling();
         app.UseCors(WebsiteClientOrigin);
 
         if (app.Environment.IsDevelopment())
@@ -150,6 +126,7 @@ public class Program
         app.UseSerilogRequestLogging();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.MapHealthChecks("/health");
         app.MapControllers();
         app.Run();
     }

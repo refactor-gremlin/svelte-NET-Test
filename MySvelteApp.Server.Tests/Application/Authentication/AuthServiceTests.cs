@@ -10,23 +10,18 @@ namespace MySvelteApp.Server.Tests.Application.Authentication;
 
 public class AuthServiceTests : ServiceTestTemplate<IAuthService>
 {
-    private readonly Mock<IUserRepository> _mockUserRepository;
-    private readonly Mock<IPasswordHasher> _mockPasswordHasher;
-    private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator;
-
-    public AuthServiceTests()
-    {
-        _mockUserRepository = new Mock<IUserRepository>();
-        _mockPasswordHasher = new Mock<IPasswordHasher>();
-        _mockJwtTokenGenerator = new Mock<IJwtTokenGenerator>();
-    }
+    private readonly Mock<IUserRepository> _mockUserRepository = new();
+    private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
+    private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator = new();
+    private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
 
     protected override IAuthService CreateService()
     {
         return new AuthService(
             _mockUserRepository.Object,
             _mockPasswordHasher.Object,
-            _mockJwtTokenGenerator.Object);
+            _mockJwtTokenGenerator.Object,
+            _mockUnitOfWork.Object);
     }
 
     [Fact]
@@ -45,6 +40,8 @@ public class AuthServiceTests : ServiceTestTemplate<IAuthService>
             .Returns(("testhash", "testsalt"));
         _mockUserRepository.Setup(x => x.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        _mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
         _mockJwtTokenGenerator.Setup(x => x.GenerateToken(It.IsAny<User>()))
             .Returns(token);
 

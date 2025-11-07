@@ -1,24 +1,26 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MySvelteApp.Server.Application.Common.Interfaces;
 using MySvelteApp.Server.Domain.Entities;
+using MySvelteApp.Server.Infrastructure.Configuration;
 
 namespace MySvelteApp.Server.Infrastructure.Authentication;
 
 public class JwtTokenGenerator : IJwtTokenGenerator
 {
-    private readonly IConfiguration _configuration;
+    private readonly JwtSettings _jwtSettings;
 
-    public JwtTokenGenerator(IConfiguration configuration)
+    public JwtTokenGenerator(IOptions<JwtSettings> jwtSettings)
     {
-        _configuration = configuration;
+        _jwtSettings = jwtSettings.Value;
     }
 
     public string GenerateToken(User user)
     {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "your-secret-key-here"));
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -29,10 +31,10 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         };
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"] ?? "your-issuer",
-            audience: _configuration["Jwt:Audience"] ?? "your-audience",
+            issuer: _jwtSettings.Issuer,
+            audience: _jwtSettings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(24),
+            expires: DateTime.UtcNow.AddHours(_jwtSettings.ExpirationHours),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

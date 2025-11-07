@@ -52,7 +52,7 @@ public class RandomPokemonControllerTests : TestBase
     {
         // Arrange
         _mockPokemonService.Setup(x => x.GetRandomPokemonAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RandomPokemonDto?)null);
+            .ReturnsAsync((RandomPokemonDto)null!);
 
         // Act
         var result = await _controller.Get(CancellationToken.None);

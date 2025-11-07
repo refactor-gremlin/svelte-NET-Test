@@ -11,12 +11,7 @@ namespace MySvelteApp.Server.Tests.Presentation.Controllers;
 
 public class AuthControllerTests : ControllerTestTemplate<AuthController>
 {
-    private readonly Mock<IAuthService> _mockAuthService;
-
-    public AuthControllerTests()
-    {
-        _mockAuthService = new Mock<IAuthService>();
-    }
+    private readonly Mock<IAuthService> _mockAuthService = new();
 
     protected override AuthController CreateController()
     {
