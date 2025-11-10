@@ -4,10 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
-using MySvelteApp.Server.Infrastructure.Persistence;
-using MySvelteApp.Server.Application.Authentication.DTOs;
-using MySvelteApp.Server.Application.Pokemon.DTOs;
-using MySvelteApp.Server.Presentation.Models.Auth;
+using MySvelteApp.Server.Shared.Infrastructure.Persistence;
+using MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
+using MySvelteApp.Server.Shared.Common.DTOs.Responses;
 using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Integration;
@@ -25,29 +24,31 @@ public class EndToEndIntegrationTests : IntegrationTestTemplate
     public async Task PokemonFeature_WorksCorrectly()
     {
         // Act
-        var response = await Client.GetAsync("/RandomPokemon");
+        var response = await Client.GetAsync("/pokemon/random");
 
         // Assert
         response.EnsureSuccessStatusCode();
         
-        var pokemon = await response.Content.ReadFromJsonAsync<RandomPokemonDto>();
-        pokemon.Should().NotBeNull();
-        pokemon!.Name.Should().NotBeNullOrEmpty();
-        pokemon.Type.Should().NotBeNullOrEmpty();
-        pokemon.Image.Should().NotBeNullOrEmpty();
+        var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<GetRandomPokemonResponse>>();
+        apiResponse.Should().NotBeNull();
+        apiResponse!.Success.Should().BeTrue();
+        apiResponse.Data.Name.Should().NotBeNullOrEmpty();
+        apiResponse.Data.Type.Should().NotBeNullOrEmpty();
+        apiResponse.Data.Image.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
     public async Task PokemonEndpoint_WorksCorrectly()
     {
         // Act
-        var response = await Client.GetAsync("/RandomPokemon");
+        var response = await Client.GetAsync("/pokemon/random");
 
         // Assert
         response.EnsureSuccessStatusCode();
         
-        var pokemon = await response.Content.ReadFromJsonAsync<RandomPokemonDto>();
-        pokemon.Should().NotBeNull();
-        pokemon!.Name.Should().NotBeNullOrEmpty();
+        var apiResponse = await response.Content.ReadFromJsonAsync<ApiResponse<GetRandomPokemonResponse>>();
+        apiResponse.Should().NotBeNull();
+        apiResponse!.Success.Should().BeTrue();
+        apiResponse.Data.Name.Should().NotBeNullOrEmpty();
     }
 }

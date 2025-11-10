@@ -6,8 +6,8 @@ using Moq;
 using FluentAssertions;
 using System.Net;
 using Xunit;
-using MySvelteApp.Server.Application.Authentication.DTOs;
-using MySvelteApp.Server.Infrastructure.Persistence;
+using MySvelteApp.Server.Features.Auth.RegisterUser;
+using MySvelteApp.Server.Shared.Infrastructure.Persistence;
 using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.TestFixtures;

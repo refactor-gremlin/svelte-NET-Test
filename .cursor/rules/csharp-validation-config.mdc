@@ -1,0 +1,270 @@
+---
+description: FluentValidation and configuration patterns
+alwaysApply: false
+---
+# C# Validation and Configuration
+
+## FluentValidation Patterns
+
+### Validator Location
+```csharp
+// ✅ DO: Put validator in feature folder
+Features/Auth/RegisterUser/
+├── RegisterUserRequest.cs
+├── RegisterUserResponse.cs
+├── RegisterUserHandler.cs
+├── RegisterUserValidator.cs  // In feature folder
+└── RegisterUserEndpoint.cs
+
+// ❌ DON'T: Put validators in separate folder
+Validators/RegisterUserValidator.cs
+```
+
+### Validator Structure
+```csharp
+// ✅ DO: Use AbstractValidator<T> with clear rules
+using FluentValidation;
+using MySvelteApp.Server.Features.Auth.RegisterUser;
+
+namespace MySvelteApp.Server.Features.Auth.RegisterUser;
+
+public class RegisterUserValidator : AbstractValidator<RegisterUserRequest>
+{
+    public RegisterUserValidator()
+    {
+        RuleFor(x => x.Username)
+            .NotEmpty().WithMessage("Username is required.")
+            .MinimumLength(3).WithMessage("Username must be at least 3 characters long.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("Please enter a valid email address.");
+    }
+}
+
+// ❌ DON'T: Put validation logic in handler
+public class RegisterUserHandler
+{
+    public async Task<ApiResult<RegisterUserResponse>> HandleAsync(...)
+    {
+        if (string.IsNullOrEmpty(request.Username))  // Use validator instead!
+        {
+            return ApiResult<RegisterUserResponse>.ValidationError("Username required");
+        }
+    }
+}
+```
+
+### Validation Messages
+```csharp
+// ✅ DO: Provide clear, user-friendly messages
+RuleFor(x => x.Username)
+    .NotEmpty().WithMessage("Username is required.")
+    .MinimumLength(3).WithMessage("Username must be at least 3 characters long.");
+
+// ❌ DON'T: Use technical or vague messages
+RuleFor(x => x.Username)
+    .NotEmpty().WithMessage("Invalid input")
+    .MinimumLength(3).WithMessage("Too short");
+```
+
+### Complex Validation
+```csharp
+// ✅ DO: Use regex patterns for complex validation
+private static readonly Regex UsernameRegex = new("^[a-zA-Z0-9_]+$", RegexOptions.Compiled);
+
+RuleFor(x => x.Username)
+    .Matches(UsernameRegex).WithMessage("Username can only contain letters, numbers, and underscores.");
+
+// ✅ DO: Use Must() for custom validation logic
+RuleFor(x => x.Password)
+    .Must(p => p.Any(char.IsUpper) && p.Any(char.IsLower) && p.Any(char.IsDigit))
+    .WithMessage("Password must contain at least one uppercase letter, one lowercase letter, and one number.");
+
+// ❌ DON'T: Put complex validation in handler
+public async Task<ApiResult<Response>> HandleAsync(...)
+{
+    if (!IsValidUsername(request.Username))  // Should be in validator!
+    {
+        return ApiResult<Response>.ValidationError("Invalid username");
+    }
+}
+```
+
+### Automatic Registration
+```csharp
+// ✅ DO: Validators are automatically discovered and registered
+// No manual registration needed - handled by AddValidatorsFromAssemblyContaining
+
+// ❌ DON'T: Manually register validators
+services.AddScoped<IValidator<RegisterUserRequest>, RegisterUserValidator>();  // Not needed!
+```
+
+## Configuration Patterns
+
+### Configuration Class Structure
+```csharp
+// ✅ DO: Use strongly-typed configuration classes
+namespace MySvelteApp.Server.Shared.Infrastructure.Configuration;
+
+public class JwtSettings
+{
+    public const string SectionName = "Jwt";
+    
+    public string Key { get; set; } = string.Empty;
+    public string Issuer { get; set; } = string.Empty;
+    public string Audience { get; set; } = string.Empty;
+    public int ExpirationHours { get; set; } = 24;
+}
+
+// ❌ DON'T: Use magic strings
+var key = configuration["Jwt:Key"];  // Use GetSettings<JwtSettings>() instead
+```
+
+### Configuration Location
+```csharp
+// ✅ DO: Put configuration classes in Shared/Infrastructure/Configuration/
+Shared/Infrastructure/Configuration/
+├── JwtSettings.cs
+├── CorsSettings.cs
+└── LoggingSettings.cs
+
+// ❌ DON'T: Put configuration in feature folders
+Features/Auth/JwtSettings.cs  // Should be in Shared/
+```
+
+### Configuration Registration
+```csharp
+// ✅ DO: Register in ConfigurationExtensions.cs
+public static IServiceCollection AddConfigurationSettings(
+    this IServiceCollection services,
+    IConfiguration configuration)
+{
+    services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+    services.Configure<CorsSettings>(configuration.GetSection(CorsSettings.SectionName));
+    return services;
+}
+
+// ❌ DON'T: Register in Program.cs directly
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));  // Use extension method
+```
+
+### Accessing Configuration
+```csharp
+// ✅ DO: Use GetSettings<T>() extension method
+var jwtSettings = configuration.GetSettings<JwtSettings>();
+var corsSettings = configuration.GetSettings<CorsSettings>();
+
+// ✅ DO: Inject IOptions<T> in handlers
+public class MyHandler
+{
+    private readonly JwtSettings _jwtSettings;
+    
+    public MyHandler(IOptions<JwtSettings> jwtSettings)
+    {
+        _jwtSettings = jwtSettings.Value;
+    }
+}
+
+// ❌ DON'T: Use magic strings or direct IConfiguration access
+var key = configuration["Jwt:Key"];  // Use GetSettings<JwtSettings>() instead
+```
+
+### Configuration Validation
+```csharp
+// ✅ DO: Use DataAnnotations for configuration validation
+public class JwtSettings
+{
+    [Required]
+    [MinLength(32)]
+    public string Key { get; set; } = string.Empty;
+    
+    [Required]
+    public string Issuer { get; set; } = string.Empty;
+}
+
+// Configuration is validated at startup via ValidateDataAnnotations()
+
+// ❌ DON'T: Skip configuration validation
+public class JwtSettings
+{
+    public string Key { get; set; } = string.Empty;  // No validation!
+}
+```
+
+### Section Name Pattern
+```csharp
+// ✅ DO: Use const string for section name
+public class JwtSettings
+{
+    public const string SectionName = "Jwt";
+    // ...
+}
+
+services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+
+// ❌ DON'T: Hardcode section names
+services.Configure<JwtSettings>(configuration.GetSection("Jwt"));  // Use constant
+```
+
+## appsettings.json Structure
+
+### Configuration Sections
+```json
+// ✅ DO: Match section names to SectionName constant
+{
+  "Jwt": {
+    "Key": "your-secret-key",
+    "Issuer": "MySvelteApp",
+    "Audience": "MySvelteApp",
+    "ExpirationHours": 24
+  },
+  "Cors": {
+    "AllowedOrigins": ["http://localhost:5173"]
+  }
+}
+
+// ❌ DON'T: Use inconsistent naming
+{
+  "JWT": {  // Should match SectionName = "Jwt"
+    "key": "..."  // Should be PascalCase
+  }
+}
+```
+
+## Testing Configuration
+
+### Mocking IOptions<T>
+```csharp
+// ✅ DO: Mock IOptions<T> in tests
+private readonly Mock<IOptions<JwtSettings>> _mockJwtSettings = new();
+
+public MyHandlerTests()
+{
+    var jwtSettings = new JwtSettings
+    {
+        Key = "test-key-that-is-long-enough",
+        Issuer = "test-issuer",
+        Audience = "test-audience",
+        ExpirationHours = 24
+    };
+    
+    _mockJwtSettings.Setup(x => x.Value).Returns(jwtSettings);
+}
+
+// ❌ DON'T: Create real configuration in tests
+var configuration = new ConfigurationBuilder()
+    .AddInMemoryCollection(...)
+    .Build();  // Use mock instead
+```
+
+## Best Practices
+
+1. **Validators in feature folders** - Keep validators with their feature
+2. **Clear validation messages** - Provide user-friendly error messages
+3. **Automatic registration** - Validators are auto-discovered
+4. **Strongly-typed configuration** - Use classes, not magic strings
+5. **Configuration in Shared/** - Put config classes in Shared/Infrastructure/Configuration/
+6. **Use GetSettings<T>()** - Access configuration via extension method
+7. **Validate configuration** - Use DataAnnotations for config validation
+8. **Use constants** - Define SectionName as const string

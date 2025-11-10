@@ -1,6 +1,7 @@
-using MySvelteApp.Server.Domain.Entities;
-using MySvelteApp.Server.Application.Authentication.DTOs;
-using MySvelteApp.Server.Application.Pokemon.DTOs;
+using MySvelteApp.Server.Shared.Domain.Entities;
+using MySvelteApp.Server.Features.Auth.RegisterUser;
+using MySvelteApp.Server.Features.Auth.LoginUser;
+using MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
 
 namespace MySvelteApp.Server.Tests.TestFixtures;
 
@@ -93,12 +94,12 @@ public static class GenericTestDataFactory
     // Add new factory methods here when adding new features
 
     // Auth DTO factories
-    public static RegisterRequest CreateRegisterRequest(
+    public static RegisterUserRequest CreateRegisterRequest(
         string username = "testuser",
         string email = "test@example.com",
         string password = "Password123")
     {
-        return new RegisterRequest
+        return new RegisterUserRequest
         {
             Username = username,
             Email = email,
@@ -106,20 +107,20 @@ public static class GenericTestDataFactory
         };
     }
 
-    public static LoginRequest CreateLoginRequest(
+    public static LoginUserRequest CreateLoginRequest(
         string username = "testuser",
         string password = "Password123")
     {
-        return new LoginRequest
+        return new LoginUserRequest
         {
             Username = username,
             Password = password
         };
     }
 
-    public static List<RegisterRequest> CreateMultipleRegisterRequests(int count)
+    public static List<RegisterUserRequest> CreateMultipleRegisterRequests(int count)
     {
-        var requests = new List<RegisterRequest>();
+        var requests = new List<RegisterUserRequest>();
         for (int i = 1; i <= count; i++)
         {
             requests.Add(CreateRegisterRequest($"user{i}", $"user{i}@example.com", $"Password{i}"));
@@ -162,12 +163,12 @@ public static class GenericTestDataFactory
     }
 
     // Pokemon DTO factories
-    public static RandomPokemonDto CreateRandomPokemonDto(
+    public static GetRandomPokemonResponse CreateRandomPokemonDto(
         string name = "pikachu",
         string type = "electric",
         string image = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png")
     {
-        return new RandomPokemonDto
+        return new GetRandomPokemonResponse
         {
             Name = name,
             Type = type,
@@ -175,9 +176,9 @@ public static class GenericTestDataFactory
         };
     }
 
-    public static List<RandomPokemonDto> CreateMultipleRandomPokemonDtos(int count)
+    public static List<GetRandomPokemonResponse> CreateMultipleRandomPokemonDtos(int count)
     {
-        var pokemons = new List<RandomPokemonDto>();
+        var pokemons = new List<GetRandomPokemonResponse>();
         for (int i = 1; i <= count; i++)
         {
             pokemons.Add(CreateRandomPokemonDto($"pokemon{i}", $"type{i}", $"https://example.com/pokemon{i}.png"));

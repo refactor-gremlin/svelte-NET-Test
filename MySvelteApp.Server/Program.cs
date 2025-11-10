@@ -1,7 +1,7 @@
 using Microsoft.OpenApi.Models;
-using MySvelteApp.Server.Infrastructure.Configuration;
-using MySvelteApp.Server.Infrastructure.DependencyInjection;
-using MySvelteApp.Server.Presentation.Middleware;
+using MySvelteApp.Server.Shared.Infrastructure.Configuration;
+using MySvelteApp.Server.Shared.Infrastructure.DependencyInjection;
+using MySvelteApp.Server.Shared.Presentation.Middleware;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -18,7 +18,7 @@ public class Program
         builder.Services.AddConfigurationSettings(builder.Configuration);
 
         // Configure CORS
-        var corsSettings = builder.Configuration.GetCorsSettings();
+        var corsSettings = builder.Configuration.GetSettings<CorsSettings>();
         const string WebsiteClientOrigin = "website_client";
         builder.Services.AddCors(options =>
         {
@@ -39,12 +39,11 @@ public class Program
             });
         });
 
-        // Register application services
-        builder.Services.AddApplicationServices();
+        // Register feature handlers
+        builder.Services.AddFeatureHandlers();
         builder.Services.AddInfrastructureServices();
         builder.Services.AddAuthenticationServices(builder.Configuration);
         builder.Services.AddDatabaseServices();
-        builder.Services.AddExternalServices();
         builder.Services.AddPresentationServices();
         builder.Services.AddHealthCheckServices();
 
@@ -80,7 +79,7 @@ public class Program
         });
 
         // Configure logging
-        var loggingSettings = builder.Configuration.GetLoggingSettings();
+        var loggingSettings = builder.Configuration.GetSettings<LoggingSettings>();
         var environmentName = builder.Environment.EnvironmentName ?? "Development";
 
         builder.Host.UseSerilog((_, _, configuration) =>

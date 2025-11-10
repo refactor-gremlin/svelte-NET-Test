@@ -1,0 +1,297 @@
+---
+description: Testing patterns for handlers, endpoints, and infrastructure
+alwaysApply: false
+---
+# C# Testing Patterns
+
+## Test Structure
+
+### Mirror Production Structure
+```csharp
+// ✅ DO: Match production folder structure
+Features/Auth/RegisterUser/
+├── RegisterUserHandler.cs
+├── RegisterUserEndpoint.cs
+└── Tests/
+    ├── RegisterUserHandlerTests.cs
+    └── RegisterUserEndpointTests.cs
+
+// ❌ DON'T: Separate test structure
+Tests/Handlers/RegisterUserHandlerTests.cs
+Tests/Controllers/RegisterUserEndpointTests.cs
+```
+
+## Handler Testing
+
+### Handler Test Structure
+```csharp
+// ✅ DO: Test handler business logic
+public class RegisterUserHandlerTests
+{
+    private readonly Mock<IUserRepository> _mockUserRepository = new();
+    private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
+    private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
+    private readonly RegisterUserHandler _handler;
+
+    public RegisterUserHandlerTests()
+    {
+        _handler = new RegisterUserHandler(
+            _mockUserRepository.Object,
+            _mockUnitOfWork.Object,
+            _mockPasswordHasher.Object);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ValidRequest_ReturnsSuccess()
+    {
+        // Arrange
+        var request = GenericTestDataFactory.CreateRegisterRequest();
+        _mockUserRepository.Setup(x => x.UsernameExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _handler.HandleAsync(request);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeNull();
+        _mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+}
+
+// ❌ DON'T: Test implementation details
+[Fact]
+public async Task HandleAsync_CallsRepositoryAddAsync()
+{
+    // Don't test internal method calls
+    _mockRepository.Verify(x => x.AddAsync(...), Times.Once);  // Too granular
+}
+```
+
+### Always Mock IUnitOfWork
+```csharp
+// ✅ DO: Mock IUnitOfWork for handlers with database operations
+private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
+
+_mockUnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
+    .ReturnsAsync(1);
+
+_mockUnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+// ❌ DON'T: Forget to mock IUnitOfWork
+public class RegisterUserHandlerTests
+{
+    private readonly Mock<IUserRepository> _mockRepository = new();
+    // Missing IUnitOfWork mock!
+}
+```
+
+## Endpoint Testing
+
+### Endpoint Test Structure
+```csharp
+// ✅ DO: Test endpoint HTTP concerns
+public class RegisterUserEndpointTests : ControllerTestTemplate<RegisterUserEndpoint>
+{
+    private readonly Mock<RegisterUserHandler> _mockHandler = new();
+
+    protected override RegisterUserEndpoint CreateController()
+    {
+        return new RegisterUserEndpoint(_mockHandler.Object);
+    }
+
+    [Fact]
+    public async Task Handle_ValidRequest_ReturnsOk()
+    {
+        // Arrange
+        var request = GenericTestDataFactory.CreateRegisterRequest();
+        var response = new RegisterUserResponse { Token = "test", UserId = 1 };
+        _mockHandler.Setup(x => x.HandleAsync(request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ApiResult<RegisterUserResponse>.Success(response));
+
+        // Act
+        var result = await Controller.Handle(request, CancellationToken.None);
+
+        // Assert
+        result.Should().BeOfType<OkObjectResult>();
+        _mockHandler.Verify(x => x.HandleAsync(request, It.IsAny<CancellationToken>()), Times.Once);
+    }
+}
+
+// ❌ DON'T: Test business logic in endpoint tests
+[Fact]
+public async Task Handle_ValidRequest_CreatesUser()
+{
+    // Business logic belongs in handler tests
+    // Endpoint tests should only verify HTTP mapping
+}
+```
+
+### Test Error Responses
+```csharp
+// ✅ DO: Test error response mapping
+[Fact]
+public async Task Handle_ConflictError_ReturnsConflict()
+{
+    // Arrange
+    var request = GenericTestDataFactory.CreateRegisterRequest();
+    _mockHandler.Setup(x => x.HandleAsync(request, It.IsAny<CancellationToken>()))
+        .ReturnsAsync(ApiResult<RegisterUserResponse>.Conflict("Username already taken"));
+
+    // Act
+    var result = await Controller.Handle(request, CancellationToken.None);
+
+    // Assert
+    result.Should().BeOfType<ConflictObjectResult>();
+    var errorResponse = ((ConflictObjectResult)result).Value.Should().BeOfType<ApiErrorResponse>();
+}
+
+// ❌ DON'T: Skip error response tests
+// Always test both success and error paths
+```
+
+## Mocking Patterns
+
+### Use GenericTestDataFactory
+```csharp
+// ✅ DO: Use factory for test data
+var request = GenericTestDataFactory.CreateRegisterRequest();
+var user = GenericTestDataFactory.CreateUser();
+var pokemon = GenericTestDataFactory.CreateRandomPokemonDto();
+
+// ❌ DON'T: Create test data inline
+var request = new RegisterUserRequest
+{
+    Username = "testuser",
+    Email = "test@example.com",
+    Password = "Password123"
+};  // Use factory instead
+```
+
+### Mock Setup Patterns
+```csharp
+// ✅ DO: Use It.IsAny<> for CancellationToken
+_mockRepository.Setup(x => x.GetByIdAsync(
+    It.IsAny<int>(),
+    It.IsAny<CancellationToken>()))
+    .ReturnsAsync(user);
+
+// ✅ DO: Use specific values when testing specific scenarios
+_mockRepository.Setup(x => x.GetByIdAsync(
+    1,
+    It.IsAny<CancellationToken>()))
+    .ReturnsAsync(user);
+
+// ❌ DON'T: Hardcode CancellationToken
+_mockRepository.Setup(x => x.GetByIdAsync(1, CancellationToken.None))
+    .ReturnsAsync(user);  // Use It.IsAny<CancellationToken>()
+```
+
+### HttpClient Mocking
+```csharp
+// ✅ DO: Mock HttpMessageHandler for external APIs
+var mockHandler = new Mock<HttpMessageHandler>();
+mockHandler.Protected()
+    .Setup<Task<HttpResponseMessage>>(
+        "SendAsync",
+        ItExpr.IsAny<HttpRequestMessage>(),
+        ItExpr.IsAny<CancellationToken>())
+    .ReturnsAsync(HttpClientTestUtilities.CreateJsonResponse(expectedData));
+
+var httpClient = new HttpClient(mockHandler.Object);
+
+// ❌ DON'T: Create real HttpClient in tests
+var httpClient = new HttpClient();  // Will make real HTTP calls!
+```
+
+## Test Naming
+
+### Use Descriptive Test Names
+```csharp
+// ✅ DO: Use MethodName_Scenario_ExpectedResult pattern
+[Fact]
+public async Task HandleAsync_ValidRequest_ReturnsSuccess() { }
+[Fact]
+public async Task HandleAsync_ExistingUsername_ReturnsConflict() { }
+[Fact]
+public async Task HandleAsync_NonExistentUser_ReturnsNotFound() { }
+
+// ❌ DON'T: Use vague test names
+[Fact]
+public async Task Test1() { }
+[Fact]
+public async Task HandleAsync_Test() { }
+```
+
+## Assertions
+
+### Use FluentAssertions
+```csharp
+// ✅ DO: Use FluentAssertions for readable assertions
+result.IsSuccess.Should().BeTrue();
+result.Value.Should().NotBeNull();
+result.Value!.Token.Should().Be("expected-token");
+result.Should().BeOfType<OkObjectResult>();
+_mock.Verify(x => x.Method(), Times.Once);
+
+// ❌ DON'T: Use basic assertions
+Assert.True(result.IsSuccess);
+Assert.NotNull(result.Value);
+Assert.Equal("expected-token", result.Value.Token);
+```
+
+## Test Organization
+
+### One Test Class Per Handler/Endpoint
+```csharp
+// ✅ DO: Separate test classes
+RegisterUserHandlerTests.cs
+RegisterUserEndpointTests.cs
+LoginUserHandlerTests.cs
+LoginUserEndpointTests.cs
+
+// ❌ DON'T: Combine multiple features
+AuthHandlerTests.cs  // Too broad
+```
+
+### Arrange-Act-Assert Pattern
+```csharp
+// ✅ DO: Follow AAA pattern
+[Fact]
+public async Task HandleAsync_ValidRequest_ReturnsSuccess()
+{
+    // Arrange
+    var request = GenericTestDataFactory.CreateRegisterRequest();
+    _mockRepository.Setup(...);
+
+    // Act
+    var result = await _handler.HandleAsync(request);
+
+    // Assert
+    result.IsSuccess.Should().BeTrue();
+}
+
+// ❌ DON'T: Mix arrange/act/assert
+[Fact]
+public async Task HandleAsync_ValidRequest_ReturnsSuccess()
+{
+    var request = GenericTestDataFactory.CreateRegisterRequest();
+    _mockRepository.Setup(...);
+    var result = await _handler.HandleAsync(request);
+    _mockRepository.Setup(...);  // Setup after act!
+    result.IsSuccess.Should().BeTrue();
+}
+```
+
+## Best Practices
+
+1. **Mirror production structure** in test folders
+2. **Mock IUnitOfWork** for handlers with database operations
+3. **Use GenericTestDataFactory** for test data
+4. **Test both success and error paths** in endpoints
+5. **Use descriptive test names** (MethodName_Scenario_ExpectedResult)
+6. **Use FluentAssertions** for readable assertions
+7. **Follow AAA pattern** (Arrange-Act-Assert)
+8. **One test class per handler/endpoint**

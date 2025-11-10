@@ -1,0 +1,260 @@
+---
+description: Vertical Slice Architecture patterns and best practices
+alwaysApply: false
+---
+# C# Vertical Slice Architecture
+
+## Feature Structure
+
+### Always Organize by Feature, Not Layer
+```csharp
+// ✅ DO: Self-contained feature folder
+Features/Auth/RegisterUser/
+├── RegisterUserRequest.cs
+├── RegisterUserResponse.cs
+├── RegisterUserHandler.cs
+├── RegisterUserValidator.cs
+└── RegisterUserEndpoint.cs
+
+// ❌ DON'T: Layer-based organization
+Application/Authentication/RegisterUserService.cs
+Presentation/Controllers/AuthController.cs
+Domain/Entities/User.cs
+```
+
+### Feature Folder Naming
+```csharp
+// ✅ DO: Use action-based naming
+Features/Auth/RegisterUser/
+Features/Auth/LoginUser/
+Features/Pokemon/GetRandomPokemon/
+
+// ❌ DON'T: Use generic names
+Features/Auth/Auth/
+Features/Pokemon/Pokemon/
+```
+
+## Shared/ Folder Rules
+
+### When to Use Shared/
+```csharp
+// ✅ DO: Put in Shared/ if 3+ features need it
+Shared/Common/Results/ApiResult.cs
+Shared/Common/Interfaces/IUnitOfWork.cs
+Shared/Domain/Entities/User.cs
+
+// ✅ DO: Keep in feature if 1-2 features need it
+Features/Auth/RegisterUser/RegisterUserRequest.cs  // Only used by RegisterUser
+Features/Auth/LoginUser/LoginUserRequest.cs         // Only used by LoginUser
+```
+
+### Shared/ Structure
+```csharp
+// ✅ DO: Organize Shared/ by concern
+Shared/
+├── Common/          # Cross-cutting (ApiResult, interfaces)
+├── Domain/          # Domain entities
+├── Infrastructure/  # External integrations, persistence
+└── Presentation/    # Base controllers, middleware
+
+// ❌ DON'T: Mix concerns in Shared/
+Shared/Everything.cs  // Too generic
+```
+
+## Handler Patterns
+
+### Handler Structure
+```csharp
+// ✅ DO: Single responsibility handler
+public class RegisterUserHandler
+{
+    private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
+
+    public RegisterUserHandler(
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork)
+    {
+        _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<ApiResult<RegisterUserResponse>> HandleAsync(
+        RegisterUserRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        // Business logic only
+        await _userRepository.AddAsync(user, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResult<RegisterUserResponse>.Success(response);
+    }
+}
+
+// ❌ DON'T: Mix concerns in handler
+public class RegisterUserHandler
+{
+    public async Task<IActionResult> HandleAsync(...)  // Don't return IActionResult
+    {
+        // Don't put validation logic here
+        // Don't put HTTP concerns here
+    }
+}
+```
+
+### Handler Dependencies
+```csharp
+// ✅ DO: Inject only what you need
+public class RegisterUserHandler
+{
+    private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    // Only dependencies needed for this feature
+}
+
+// ❌ DON'T: Inject everything
+public class RegisterUserHandler
+{
+    private readonly IUserRepository _userRepository;
+    private readonly IProductRepository _productRepository;  // Not needed!
+    private readonly IOrderRepository _orderRepository;      // Not needed!
+}
+```
+
+## Endpoint Patterns
+
+### Endpoint Structure
+```csharp
+// ✅ DO: Thin endpoint, delegate to handler
+[ApiController]
+[Route("auth/register")]
+public class RegisterUserEndpoint : ApiControllerBase
+{
+    private readonly RegisterUserHandler _handler;
+
+    public RegisterUserEndpoint(RegisterUserHandler handler)
+    {
+        _handler = handler;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Handle(
+        [FromBody] RegisterUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _handler.HandleAsync(request, cancellationToken);
+        return ToActionResult(result);  // Use base class helper
+    }
+}
+
+// ❌ DON'T: Put business logic in endpoint
+public class RegisterUserEndpoint : ApiControllerBase
+{
+    [HttpPost]
+    public async Task<IActionResult> Handle(...)
+    {
+        // Don't put business logic here
+        var user = new User { ... };
+        await _repository.AddAsync(user);
+        // This belongs in Handler!
+    }
+}
+```
+
+### Route Naming
+```csharp
+// ✅ DO: Use kebab-case for routes
+[Route("auth/register")]
+[Route("auth/login")]
+[Route("pokemon/random")]
+
+// ❌ DON'T: Use PascalCase or camelCase
+[Route("Auth/Register")]
+[Route("authRegister")]
+```
+
+## Naming Conventions
+
+### Feature Files
+```csharp
+// ✅ DO: Consistent naming
+{FeatureName}Request.cs
+{FeatureName}Response.cs
+{FeatureName}Handler.cs
+{FeatureName}Validator.cs
+{FeatureName}Endpoint.cs
+
+// Examples:
+RegisterUserRequest.cs
+RegisterUserResponse.cs
+RegisterUserHandler.cs
+RegisterUserValidator.cs
+RegisterUserEndpoint.cs
+```
+
+### Namespaces
+```csharp
+// ✅ DO: Match folder structure
+namespace MySvelteApp.Server.Features.Auth.RegisterUser;
+
+// ❌ DON'T: Generic namespaces
+namespace MySvelteApp.Server.Auth;
+namespace MySvelteApp.Server.Controllers;
+```
+
+## Feature Grouping
+
+### When to Group Features
+```csharp
+// ✅ DO: Group related features
+Features/Auth/
+├── RegisterUser/
+├── LoginUser/
+├── GetCurrentUser/
+└── TestAuth/
+
+// ✅ DO: Separate unrelated features
+Features/Auth/RegisterUser/
+Features/Pokemon/GetRandomPokemon/
+
+// ❌ DON'T: Mix unrelated features
+Features/Mixed/
+├── RegisterUser/
+└── GetRandomPokemon/  // Should be in Pokemon/
+```
+
+## Service Registration
+
+### Handler Registration
+```csharp
+// ✅ DO: Register in AddFeatureHandlers()
+public static IServiceCollection AddFeatureHandlers(this IServiceCollection services)
+{
+    services.AddScoped<RegisterUserHandler>();
+    services.AddScoped<LoginUserHandler>();
+    return services;
+}
+
+// ❌ DON'T: Register in multiple places
+// Don't register in Program.cs directly
+// Don't register in feature folder
+```
+
+### HttpClient Registration
+```csharp
+// ✅ DO: Use AddHttpClient for external API handlers
+services.AddHttpClient<GetRandomPokemonHandler>();
+
+// ❌ DON'T: Create HttpClient manually in handler
+public class GetRandomPokemonHandler
+{
+    private readonly HttpClient _httpClient = new();  // Don't do this!
+}
+```
+
+## Key Principles
+
+1. **Self-contained**: Everything for a feature lives in one folder
+2. **Shared code**: Only put in `Shared/` if 3+ features need it
+3. **Thin endpoints**: Endpoints delegate to handlers
+4. **Single responsibility**: Handlers contain business logic only
+5. **Consistent naming**: Follow `{FeatureName}{Type}` pattern

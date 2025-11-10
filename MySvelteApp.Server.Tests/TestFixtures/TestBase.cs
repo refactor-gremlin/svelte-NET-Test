@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using MySvelteApp.Server.Infrastructure.Persistence;
-using MySvelteApp.Server.Domain.Entities;
+using MySvelteApp.Server.Shared.Infrastructure.Persistence;
+using MySvelteApp.Server.Shared.Domain.Entities;
 using Xunit;
 
 namespace MySvelteApp.Server.Tests.TestFixtures;
