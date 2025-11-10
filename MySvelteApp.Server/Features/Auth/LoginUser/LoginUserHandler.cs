@@ -1,6 +1,8 @@
 using MySvelteApp.Server.Features.Auth.LoginUser;
 using MySvelteApp.Server.Shared.Common.Interfaces;
 using MySvelteApp.Server.Shared.Common.Results;
+using MySvelteApp.Server.Shared.Common.DTOs;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 
 namespace MySvelteApp.Server.Features.Auth.LoginUser;
 
@@ -24,8 +26,18 @@ public class LoginUserHandler
         LoginUserRequest request,
         CancellationToken cancellationToken = default)
     {
-        var trimmedUsername = request.Username.Trim();
-        var user = await _userRepository.GetByUsernameAsync(trimmedUsername, cancellationToken);
+        // Create username value object
+        Username username;
+        try
+        {
+            username = Username.Create(request.Username);
+        }
+        catch (ArgumentException ex)
+        {
+            return ApiResult<LoginUserResponse>.ValidationError(ex.Message);
+        }
+
+        var user = await _userRepository.GetByUsernameAsync(username, cancellationToken);
 
         if (user is null)
         {
@@ -43,8 +55,12 @@ public class LoginUserHandler
         return ApiResult<LoginUserResponse>.Success(new LoginUserResponse
         {
             Token = token,
-            UserId = user.Id,
-            Username = user.Username
+            User = new UserDto
+            {
+                Id = user.Id,
+                Username = user.Username.Value,
+                Email = user.Email.Value
+            }
         });
     }
 }

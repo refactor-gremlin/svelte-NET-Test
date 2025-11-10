@@ -1,6 +1,7 @@
 using MySvelteApp.Server.Features.Auth.GetCurrentUser;
 using MySvelteApp.Server.Shared.Common.Interfaces;
 using MySvelteApp.Server.Shared.Common.Results;
+using MySvelteApp.Server.Shared.Common.DTOs;
 
 namespace MySvelteApp.Server.Features.Auth.GetCurrentUser;
 
@@ -28,8 +29,8 @@ public class GetCurrentUserHandler
             User = new UserDto
             {
                 Id = user.Id,
-                Username = user.Username,
-                Email = user.Email
+                Username = user.Username.Value,
+                Email = user.Email.Value
             }
         });
     }

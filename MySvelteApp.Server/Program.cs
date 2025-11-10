@@ -42,6 +42,8 @@ public class Program
         // Register feature handlers
         builder.Services.AddFeatureHandlers();
         builder.Services.AddInfrastructureServices();
+        builder.Services.AddDomainServices();
+        builder.Services.AddDomainEvents();
         builder.Services.AddAuthenticationServices(builder.Configuration);
         builder.Services.AddDatabaseServices();
         builder.Services.AddPresentationServices();

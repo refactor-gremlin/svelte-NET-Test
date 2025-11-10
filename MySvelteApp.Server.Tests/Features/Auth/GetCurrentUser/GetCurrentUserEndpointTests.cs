@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using FluentAssertions;
 using MySvelteApp.Server.Features.Auth.GetCurrentUser;
+using MySvelteApp.Server.Shared.Common.DTOs;
 using MySvelteApp.Server.Shared.Common.DTOs.Responses;
 using MySvelteApp.Server.Shared.Common.Results;
 using MySvelteApp.Server.Tests.TestFixtures;

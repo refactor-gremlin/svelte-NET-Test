@@ -11,6 +11,8 @@ using MySvelteApp.Server.Features.Auth.LoginUser;
 using MySvelteApp.Server.Features.Auth.RegisterUser;
 using MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
 using MySvelteApp.Server.Shared.Common.Interfaces;
+using MySvelteApp.Server.Shared.Domain.Events;
+using MySvelteApp.Server.Shared.Domain.Services;
 using MySvelteApp.Server.Shared.Infrastructure.Authentication;
 using MySvelteApp.Server.Shared.Infrastructure.Configuration;
 using MySvelteApp.Server.Shared.Infrastructure.HealthChecks;
@@ -42,6 +44,18 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        return services;
+    }
+    
+    public static IServiceCollection AddDomainServices(this IServiceCollection services)
+    {
+        services.AddScoped<IUserDomainService, UserDomainService>();
+        return services;
+    }
+    
+    public static IServiceCollection AddDomainEvents(this IServiceCollection services)
+    {
+        services.AddScoped<IDomainEventPublisher, DomainEventPublisher>();
         return services;
     }
     

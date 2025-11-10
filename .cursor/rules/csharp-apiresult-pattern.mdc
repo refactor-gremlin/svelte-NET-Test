@@ -6,242 +6,50 @@ alwaysApply: false
 
 ## Handler Return Pattern
 
-### Always Return ApiResult<T>
-```csharp
-// ✅ DO: Return ApiResult<T> from handlers
-public async Task<ApiResult<RegisterUserResponse>> HandleAsync(
-    RegisterUserRequest request,
-    CancellationToken cancellationToken = default)
-{
-    // Success case
-    return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse { ... });
-    
-    // Error cases
-    return ApiResult<RegisterUserResponse>.Conflict("Username already taken");
-    return ApiResult<RegisterUserResponse>.Unauthorized("Invalid credentials");
-    return ApiResult<RegisterUserResponse>.NotFound("User not found");
-}
+**Always return ApiResult<T> from handlers:**
 
-// ❌ DON'T: Return raw types or throw exceptions
-public async Task<RegisterUserResponse> HandleAsync(...)  // Missing error handling
-{
-    throw new Exception("Error");  // Don't throw, return ApiResult
-}
+```csharp
+// Success
+return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse { ... });
+
+// Errors
+return ApiResult<Response>.Conflict("Username already taken");
+return ApiResult<Response>.Unauthorized("Invalid credentials");
+return ApiResult<Response>.NotFound("User not found");
+return ApiResult<Response>.ValidationError("Invalid input");
+return ApiResult<Response>.Failure("Generic error");
 ```
 
 ## Error Type Selection
 
-### Conflict (409)
-```csharp
-// ✅ DO: Use Conflict for duplicate/resource conflicts
-if (await _repository.UsernameExistsAsync(username, cancellationToken))
-{
-    return ApiResult<RegisterUserResponse>.Conflict("Username already taken");
-}
-
-if (await _repository.EmailExistsAsync(email, cancellationToken))
-{
-    return ApiResult<RegisterUserResponse>.Conflict("Email already registered");
-}
-
-// ❌ DON'T: Use Conflict for validation errors
-return ApiResult<RegisterUserResponse>.Conflict("Username is required");  // Use ValidationError
-```
-
-### Unauthorized (401)
-```csharp
-// ✅ DO: Use Unauthorized for authentication failures
-if (user == null || !_passwordHasher.VerifyPassword(password, user.PasswordHash, user.PasswordSalt))
-{
-    return ApiResult<LoginUserResponse>.Unauthorized("Invalid username or password");
-}
-
-// ❌ DON'T: Use Unauthorized for missing data
-return ApiResult<LoginUserResponse>.Unauthorized("User not found");  // Use NotFound
-```
-
-### NotFound (404)
-```csharp
-// ✅ DO: Use NotFound when resource doesn't exist
-var user = await _repository.GetByIdAsync(userId, cancellationToken);
-if (user == null)
-{
-    return ApiResult<GetCurrentUserResponse>.NotFound("User not found");
-}
-
-// ❌ DON'T: Use NotFound for validation errors
-return ApiResult<GetCurrentUserResponse>.NotFound("Invalid user ID format");  // Use ValidationError
-```
-
-### ValidationError (400)
-```csharp
-// ✅ DO: Use ValidationError for business rule violations
-if (request.Amount <= 0)
-{
-    return ApiResult<CreateOrderResponse>.ValidationError("Amount must be greater than zero");
-}
-
-// Note: Input validation (FluentValidation) is handled automatically by ValidationFilter
-// Use ValidationError for business logic validation failures
-```
-
-### Failure (400)
-```csharp
-// ✅ DO: Use Failure for generic errors
-try
-{
-    var result = await _externalApi.GetDataAsync();
-    return ApiResult<Response>.Success(result);
-}
-catch (Exception ex)
-{
-    return ApiResult<Response>.Failure($"Failed to retrieve data: {ex.Message}");
-}
-
-// ❌ DON'T: Use Failure when specific error type applies
-return ApiResult<Response>.Failure("User not found");  // Use NotFound
-```
+- **Conflict (409)**: Duplicate/resource conflicts (username taken, email registered)
+- **Unauthorized (401)**: Authentication failures (invalid credentials)
+- **NotFound (404)**: Resource doesn't exist
+- **ValidationError (400)**: Business rule violations (input validation handled by FluentValidation)
+- **Failure (400)**: Generic errors
 
 ## Endpoint Mapping
 
-### Use ToActionResult() Helper
 ```csharp
-// ✅ DO: Use base class helper for consistent mapping
 [HttpPost]
-public async Task<IActionResult> Handle(
-    [FromBody] RegisterUserRequest request,
-    CancellationToken cancellationToken)
+public async Task<IActionResult> Handle([FromBody] Request request, CancellationToken cancellationToken)
 {
     var result = await _handler.HandleAsync(request, cancellationToken);
     return ToActionResult(result);  // Auto-maps ApiResult → IActionResult
 }
-
-// ❌ DON'T: Manually map ApiResult
-[HttpPost]
-public async Task<IActionResult> Handle(...)
-{
-    var result = await _handler.HandleAsync(request, cancellationToken);
-    if (result.IsSuccess)
-        return Ok(result.Value);
-    else if (result.ErrorType == ApiErrorType.Conflict)
-        return Conflict(result.ErrorMessage);
-    // Don't do this - use ToActionResult()
-}
-```
-
-### ProducesResponseType Attributes
-```csharp
-// ✅ DO: Document all possible responses
-[HttpPost]
-[ProducesResponseType(typeof(ApiResponse<RegisterUserResponse>), StatusCodes.Status200OK)]
-[ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-[ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
-public async Task<IActionResult> Handle(...)
-
-// ❌ DON'T: Skip response documentation
-[HttpPost]
-public async Task<IActionResult> Handle(...)  // Missing ProducesResponseType
 ```
 
 ## Error Messages
 
-### Clear, User-Friendly Messages
-```csharp
-// ✅ DO: Provide clear, actionable error messages
-return ApiResult<RegisterUserResponse>.Conflict(
-    "This username is already taken. Please choose a different one.");
-
-return ApiResult<LoginUserResponse>.Unauthorized(
-    "Invalid username or password. Please check your credentials and try again.");
-
-// ❌ DON'T: Use technical or vague messages
-return ApiResult<RegisterUserResponse>.Conflict("Duplicate key violation");
-return ApiResult<LoginUserResponse>.Unauthorized("Error");
-```
+**Provide clear, user-friendly messages:**
+- ✅ "This username is already taken. Please choose a different one."
+- ❌ "Duplicate key violation"
 
 ## Response Format
 
-### Success Response
-```csharp
-// ✅ DO: Return ApiResponse<T> wrapper
-{
-    "Data": {
-        "Token": "jwt-token",
-        "UserId": 1,
-        "Username": "testuser"
-    },
-    "Success": true
-}
-
-// ❌ DON'T: Return raw DTO
-{
-    "Token": "jwt-token",
-    "UserId": 1
-}
-```
-
-### Error Response
-```csharp
-// ✅ DO: Return ApiErrorResponse wrapper
-{
-    "Message": "Username already taken",
-    "ErrorCode": "Conflict"
-}
-
-// ❌ DON'T: Return raw error
-{
-    "error": "Username already taken"
-}
-```
+**Success:** `{ "Data": {...}, "Success": true }`  
+**Error:** `{ "Message": "...", "ErrorCode": "Conflict" }`
 
 ## Exception Handling
 
-### Don't Throw, Return ApiResult
-```csharp
-// ✅ DO: Catch exceptions and return ApiResult
-public async Task<ApiResult<Response>> HandleAsync(...)
-{
-    try
-    {
-        var result = await _externalService.CallAsync();
-        return ApiResult<Response>.Success(result);
-    }
-    catch (HttpRequestException ex)
-    {
-        return ApiResult<Response>.Failure($"External service error: {ex.Message}");
-    }
-}
-
-// ❌ DON'T: Let exceptions bubble up
-public async Task<ApiResult<Response>> HandleAsync(...)
-{
-    var result = await _externalService.CallAsync();  // May throw!
-    return ApiResult<Response>.Success(result);
-}
-```
-
-### Unhandled Exceptions
-```csharp
-// ✅ DO: Let ExceptionHandlingMiddleware catch unhandled exceptions
-// Middleware automatically converts to 500 InternalServerError
-
-// ❌ DON'T: Catch all exceptions in handlers
-try
-{
-    // Everything
-}
-catch (Exception ex)
-{
-    return ApiResult<Response>.Failure(ex.Message);  // Too broad
-}
-```
-
-## Best Practices
-
-1. **Always return ApiResult<T>** from handlers
-2. **Use specific error types** (Conflict, Unauthorized, NotFound) when applicable
-3. **Use ToActionResult()** in endpoints for consistent mapping
-4. **Provide clear error messages** for users
-5. **Document all responses** with ProducesResponseType
-6. **Catch expected exceptions** and return ApiResult
-7. **Let middleware handle** unexpected exceptions
+**Catch expected exceptions and return ApiResult. Let ExceptionHandlingMiddleware handle unexpected exceptions.**

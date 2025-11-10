@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Moq;
 using FluentAssertions;
 using MySvelteApp.Server.Features.Auth.RegisterUser;
+using MySvelteApp.Server.Shared.Common.DTOs;
 using MySvelteApp.Server.Shared.Common.DTOs.Responses;
 using MySvelteApp.Server.Shared.Common.Results;
 using MySvelteApp.Server.Tests.TestFixtures;
@@ -25,8 +26,12 @@ public class RegisterUserEndpointTests : ControllerTestTemplate<RegisterUserEndp
         var response = new RegisterUserResponse
         {
             Token = "test-token",
-            UserId = 1,
-            Username = "testuser"
+            User = new UserDto
+            {
+                Id = 1,
+                Username = "testuser",
+                Email = "test@example.com"
+            }
         };
 
         _mockHandler.Setup(x => x.HandleAsync(request, It.IsAny<CancellationToken>()))
@@ -40,8 +45,9 @@ public class RegisterUserEndpointTests : ControllerTestTemplate<RegisterUserEndp
         var apiResponse = okResult.Value.Should().BeOfType<ApiResponse<RegisterUserResponse>>().Subject;
         apiResponse.Success.Should().BeTrue();
         apiResponse.Data.Token.Should().Be(response.Token);
-        apiResponse.Data.UserId.Should().Be(response.UserId);
-        apiResponse.Data.Username.Should().Be(response.Username);
+        apiResponse.Data.User.Id.Should().Be(response.User.Id);
+        apiResponse.Data.User.Username.Should().Be(response.User.Username);
+        apiResponse.Data.User.Email.Should().Be(response.User.Email);
     }
 
     [Fact]

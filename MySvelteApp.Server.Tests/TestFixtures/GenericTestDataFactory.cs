@@ -2,6 +2,7 @@ using MySvelteApp.Server.Shared.Domain.Entities;
 using MySvelteApp.Server.Features.Auth.RegisterUser;
 using MySvelteApp.Server.Features.Auth.LoginUser;
 using MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 
 namespace MySvelteApp.Server.Tests.TestFixtures;
 
@@ -139,8 +140,8 @@ public static class GenericTestDataFactory
         return new User
         {
             Id = id,
-            Username = username,
-            Email = email,
+            Username = Username.Create(username),
+            Email = Email.Create(email),
             PasswordHash = passwordHash,
             PasswordSalt = passwordSalt
         };

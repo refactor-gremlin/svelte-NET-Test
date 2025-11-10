@@ -4,6 +4,7 @@ using MySvelteApp.Server.Features.Auth.LoginUser;
 using MySvelteApp.Server.Shared.Common.Interfaces;
 using MySvelteApp.Server.Shared.Common.Results;
 using MySvelteApp.Server.Shared.Domain.Entities;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Features.Auth.LoginUser;
@@ -31,7 +32,7 @@ public class LoginUserHandlerTests
         var user = GenericTestDataFactory.CreateUser();
         var token = "test-token";
 
-        _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
+        _mockUserRepository.Setup(x => x.GetByUsernameAsync(It.IsAny<Username>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _mockPasswordHasher.Setup(x => x.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
             .Returns(true);
@@ -45,8 +46,10 @@ public class LoginUserHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value!.Token.Should().Be(token);
-        result.Value.UserId.Should().BeGreaterThanOrEqualTo(0);
-        result.Value.Username.Should().Be(user.Username);
+        result.Value.User.Should().NotBeNull();
+        result.Value.User.Id.Should().BeGreaterThanOrEqualTo(0);
+        result.Value.User.Username.Should().Be(user.Username.Value);
+        result.Value.User.Email.Should().Be(user.Email.Value);
     }
 
     [Fact]
@@ -55,7 +58,7 @@ public class LoginUserHandlerTests
         // Arrange
         var request = GenericTestDataFactory.CreateLoginRequest();
 
-        _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
+        _mockUserRepository.Setup(x => x.GetByUsernameAsync(It.IsAny<Username>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((User?)null);
 
         // Act
@@ -74,7 +77,7 @@ public class LoginUserHandlerTests
         var request = GenericTestDataFactory.CreateLoginRequest();
         var user = GenericTestDataFactory.CreateUser();
 
-        _mockUserRepository.Setup(x => x.GetByUsernameAsync(request.Username.Trim(), It.IsAny<CancellationToken>()))
+        _mockUserRepository.Setup(x => x.GetByUsernameAsync(It.IsAny<Username>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(user);
         _mockPasswordHasher.Setup(x => x.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
             .Returns(false);

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MySvelteApp.Server.Shared.Common.Interfaces;
 using MySvelteApp.Server.Shared.Domain.Entities;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 
 namespace MySvelteApp.Server.Shared.Infrastructure.Persistence.Repositories;
 
@@ -13,7 +14,7 @@ public class UserRepository : IUserRepository
         _dbContext = dbContext;
     }
 
-    public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
+    public async Task<User?> GetByUsernameAsync(Username username, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
     }
@@ -23,12 +24,12 @@ public class UserRepository : IUserRepository
         return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
     }
 
-    public async Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default)
+    public async Task<bool> UsernameExistsAsync(Username username, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken);
     }
 
-    public async Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<bool> EmailExistsAsync(Email email, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Users.AnyAsync(u => u.Email == email, cancellationToken);
     }

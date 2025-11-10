@@ -4,257 +4,184 @@ alwaysApply: false
 ---
 # C# Vertical Slice Architecture
 
+## Core Principles
+
+1. **Self-contained**: Everything for a feature lives in one folder
+2. **Shared code**: Only put in `Shared/` if 3+ features need it
+3. **Shared DTOs**: Always prefer shared DTOs for common entities (User, Product, etc.)
+4. **Value objects**: Use for domain concepts needing validation (Email, Username)
+5. **Domain services**: Extract complex business logic spanning multiple entities
+6. **Domain events**: Use for cross-feature communication
+
 ## Feature Structure
 
-### Always Organize by Feature, Not Layer
-```csharp
-// ✅ DO: Self-contained feature folder
-Features/Auth/RegisterUser/
-├── RegisterUserRequest.cs
-├── RegisterUserResponse.cs
-├── RegisterUserHandler.cs
-├── RegisterUserValidator.cs
-└── RegisterUserEndpoint.cs
-
-// ❌ DON'T: Layer-based organization
-Application/Authentication/RegisterUserService.cs
-Presentation/Controllers/AuthController.cs
-Domain/Entities/User.cs
+```
+Features/{Group}/{FeatureName}/
+├── {FeatureName}Request.cs
+├── {FeatureName}Response.cs
+├── {FeatureName}Handler.cs
+├── {FeatureName}Validator.cs (optional)
+├── {FeatureName}Endpoint.cs
+└── {FeatureName}Event.cs (optional)
 ```
 
-### Feature Folder Naming
-```csharp
-// ✅ DO: Use action-based naming
-Features/Auth/RegisterUser/
-Features/Auth/LoginUser/
-Features/Pokemon/GetRandomPokemon/
+## Shared DTOs
 
-// ❌ DON'T: Use generic names
-Features/Auth/Auth/
-Features/Pokemon/Pokemon/
+**Always use shared DTOs for common entities:**
+
+```csharp
+// Shared/Common/DTOs/UserDto.cs
+public class UserDto
+{
+    public int Id { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+// In responses
+public class RegisterUserResponse
+{
+    public string Token { get; set; } = string.Empty;
+    public UserDto User { get; set; } = null!;  // Shared DTO
+}
+
+// In handlers
+return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse
+{
+    Token = token,
+    User = new UserDto { Id = user.Id, Username = user.Username.Value, Email = user.Email.Value }
+});
 ```
 
-## Shared/ Folder Rules
+## Value Objects
 
-### When to Use Shared/
+**Use for validated domain concepts:**
+
 ```csharp
-// ✅ DO: Put in Shared/ if 3+ features need it
-Shared/Common/Results/ApiResult.cs
-Shared/Common/Interfaces/IUnitOfWork.cs
-Shared/Domain/Entities/User.cs
+// Create early in handler
+Email email;
+try { email = Email.Create(request.Email); }
+catch (ArgumentException ex) { return ApiResult<Response>.ValidationError(ex.Message); }
 
-// ✅ DO: Keep in feature if 1-2 features need it
-Features/Auth/RegisterUser/RegisterUserRequest.cs  // Only used by RegisterUser
-Features/Auth/LoginUser/LoginUserRequest.cs         // Only used by LoginUser
+// Use in entities
+var user = new User { Email = email, Username = username };
+
+// Access value
+string emailString = user.Email.Value;
 ```
 
-### Shared/ Structure
-```csharp
-// ✅ DO: Organize Shared/ by concern
-Shared/
-├── Common/          # Cross-cutting (ApiResult, interfaces)
-├── Domain/          # Domain entities
-├── Infrastructure/  # External integrations, persistence
-└── Presentation/    # Base controllers, middleware
+## Domain Services
 
-// ❌ DON'T: Mix concerns in Shared/
-Shared/Everything.cs  // Too generic
+**Extract complex business logic:**
+
+```csharp
+// Shared/Domain/Services/IUserDomainService.cs
+Task<(bool CanRegister, string? ErrorMessage)> CanRegisterUserAsync(Username, Email, CancellationToken);
+User CreateUser(Username, Email, string passwordHash, string passwordSalt);
+
+// In handler
+var (canRegister, errorMessage) = await _userDomainService.CanRegisterUserAsync(username, email);
+if (!canRegister) return ApiResult<Response>.Conflict(errorMessage!);
 ```
 
-## Handler Patterns
+## Domain Events
 
-### Handler Structure
+**Publish after successful operations:**
+
 ```csharp
-// ✅ DO: Single responsibility handler
+// In feature folder
+public record UserRegisteredEvent(int UserId, string Username, string Email) : IDomainEvent
+{
+    public DateTime OccurredAt { get; } = DateTime.UtcNow;
+}
+
+// In handler
+await _eventPublisher.PublishAsync(new UserRegisteredEvent(user.Id, user.Username.Value, user.Email.Value), cancellationToken);
+
+// Handler (in Shared/ or feature folder)
+public class UserRegisteredEventHandler : IDomainEventHandler<UserRegisteredEvent>
+{
+    public async Task HandleAsync(UserRegisteredEvent domainEvent, CancellationToken cancellationToken) { }
+}
+```
+
+## Handler Pattern
+
+```csharp
 public class RegisterUserHandler
 {
+    private readonly IUserDomainService _userDomainService;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDomainEventPublisher _eventPublisher;
 
-    public RegisterUserHandler(
-        IUserRepository userRepository,
-        IUnitOfWork unitOfWork)
+    public async Task<ApiResult<RegisterUserResponse>> HandleAsync(RegisterUserRequest request, CancellationToken cancellationToken = default)
     {
-        _userRepository = userRepository;
-        _unitOfWork = unitOfWork;
-    }
+        // Create value objects
+        Email email; Username username;
+        try { email = Email.Create(request.Email); username = Username.Create(request.Username); }
+        catch (ArgumentException ex) { return ApiResult<RegisterUserResponse>.ValidationError(ex.Message); }
 
-    public async Task<ApiResult<RegisterUserResponse>> HandleAsync(
-        RegisterUserRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        // Business logic only
+        // Use domain service
+        var (canRegister, errorMessage) = await _userDomainService.CanRegisterUserAsync(username, email, cancellationToken);
+        if (!canRegister) return ApiResult<RegisterUserResponse>.Conflict(errorMessage!);
+
+        // Business logic
+        var user = _userDomainService.CreateUser(username, email, hash, salt);
         await _userRepository.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        return ApiResult<RegisterUserResponse>.Success(response);
-    }
-}
 
-// ❌ DON'T: Mix concerns in handler
-public class RegisterUserHandler
-{
-    public async Task<IActionResult> HandleAsync(...)  // Don't return IActionResult
-    {
-        // Don't put validation logic here
-        // Don't put HTTP concerns here
+        // Publish event
+        await _eventPublisher.PublishAsync(new UserRegisteredEvent(user.Id, user.Username.Value, user.Email.Value), cancellationToken);
+
+        // Return with shared DTO
+        return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse
+        {
+            Token = token,
+            User = new UserDto { Id = user.Id, Username = user.Username.Value, Email = user.Email.Value }
+        });
     }
 }
 ```
 
-### Handler Dependencies
+## Endpoint Pattern
+
 ```csharp
-// ✅ DO: Inject only what you need
-public class RegisterUserHandler
-{
-    private readonly IUserRepository _userRepository;
-    private readonly IUnitOfWork _unitOfWork;
-    // Only dependencies needed for this feature
-}
-
-// ❌ DON'T: Inject everything
-public class RegisterUserHandler
-{
-    private readonly IUserRepository _userRepository;
-    private readonly IProductRepository _productRepository;  // Not needed!
-    private readonly IOrderRepository _orderRepository;      // Not needed!
-}
-```
-
-## Endpoint Patterns
-
-### Endpoint Structure
-```csharp
-// ✅ DO: Thin endpoint, delegate to handler
 [ApiController]
 [Route("auth/register")]
 public class RegisterUserEndpoint : ApiControllerBase
 {
     private readonly RegisterUserHandler _handler;
-
-    public RegisterUserEndpoint(RegisterUserHandler handler)
-    {
-        _handler = handler;
-    }
+    public RegisterUserEndpoint(RegisterUserHandler handler) => _handler = handler;
 
     [HttpPost]
-    public async Task<IActionResult> Handle(
-        [FromBody] RegisterUserRequest request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Handle([FromBody] RegisterUserRequest request, CancellationToken cancellationToken)
     {
         var result = await _handler.HandleAsync(request, cancellationToken);
-        return ToActionResult(result);  // Use base class helper
+        return ToActionResult(result);
     }
 }
-
-// ❌ DON'T: Put business logic in endpoint
-public class RegisterUserEndpoint : ApiControllerBase
-{
-    [HttpPost]
-    public async Task<IActionResult> Handle(...)
-    {
-        // Don't put business logic here
-        var user = new User { ... };
-        await _repository.AddAsync(user);
-        // This belongs in Handler!
-    }
-}
-```
-
-### Route Naming
-```csharp
-// ✅ DO: Use kebab-case for routes
-[Route("auth/register")]
-[Route("auth/login")]
-[Route("pokemon/random")]
-
-// ❌ DON'T: Use PascalCase or camelCase
-[Route("Auth/Register")]
-[Route("authRegister")]
-```
-
-## Naming Conventions
-
-### Feature Files
-```csharp
-// ✅ DO: Consistent naming
-{FeatureName}Request.cs
-{FeatureName}Response.cs
-{FeatureName}Handler.cs
-{FeatureName}Validator.cs
-{FeatureName}Endpoint.cs
-
-// Examples:
-RegisterUserRequest.cs
-RegisterUserResponse.cs
-RegisterUserHandler.cs
-RegisterUserValidator.cs
-RegisterUserEndpoint.cs
-```
-
-### Namespaces
-```csharp
-// ✅ DO: Match folder structure
-namespace MySvelteApp.Server.Features.Auth.RegisterUser;
-
-// ❌ DON'T: Generic namespaces
-namespace MySvelteApp.Server.Auth;
-namespace MySvelteApp.Server.Controllers;
-```
-
-## Feature Grouping
-
-### When to Group Features
-```csharp
-// ✅ DO: Group related features
-Features/Auth/
-├── RegisterUser/
-├── LoginUser/
-├── GetCurrentUser/
-└── TestAuth/
-
-// ✅ DO: Separate unrelated features
-Features/Auth/RegisterUser/
-Features/Pokemon/GetRandomPokemon/
-
-// ❌ DON'T: Mix unrelated features
-Features/Mixed/
-├── RegisterUser/
-└── GetRandomPokemon/  // Should be in Pokemon/
 ```
 
 ## Service Registration
 
-### Handler Registration
 ```csharp
-// ✅ DO: Register in AddFeatureHandlers()
-public static IServiceCollection AddFeatureHandlers(this IServiceCollection services)
-{
-    services.AddScoped<RegisterUserHandler>();
-    services.AddScoped<LoginUserHandler>();
-    return services;
-}
-
-// ❌ DON'T: Register in multiple places
-// Don't register in Program.cs directly
-// Don't register in feature folder
+// In ServiceCollectionExtensions
+services.AddFeatureHandlers();      // Handlers
+services.AddInfrastructureServices(); // Repositories, UnitOfWork
+services.AddDomainServices();        // Domain services
+services.AddDomainEvents();          // Event publisher
 ```
 
-### HttpClient Registration
-```csharp
-// ✅ DO: Use AddHttpClient for external API handlers
-services.AddHttpClient<GetRandomPokemonHandler>();
+## Shared/ Structure
 
-// ❌ DON'T: Create HttpClient manually in handler
-public class GetRandomPokemonHandler
-{
-    private readonly HttpClient _httpClient = new();  // Don't do this!
-}
 ```
-
-## Key Principles
-
-1. **Self-contained**: Everything for a feature lives in one folder
-2. **Shared code**: Only put in `Shared/` if 3+ features need it
-3. **Thin endpoints**: Endpoints delegate to handlers
-4. **Single responsibility**: Handlers contain business logic only
-5. **Consistent naming**: Follow `{FeatureName}{Type}` pattern
+Shared/
+├── Common/DTOs/          # Shared DTOs (UserDto, ProductDto)
+├── Common/Interfaces/    # IUnitOfWork, IRepository
+├── Common/Results/       # ApiResult
+├── Domain/Entities/      # User, Product
+├── Domain/ValueObjects/  # Email, Username
+├── Domain/Services/      # IUserDomainService
+└── Domain/Events/        # IDomainEvent, IDomainEventPublisher
+```

@@ -28,8 +28,9 @@ public class AuthenticationIntegrationTests : IntegrationTestTemplate
         registerResult.Should().NotBeNull();
         registerResult!.Success.Should().BeTrue();
         registerResult.Data.Token.Should().NotBeNullOrEmpty();
-        registerResult.Data.Username.Should().Be("testuser");
-        registerResult.Data.UserId.Should().BeGreaterThan(0);
+        registerResult.Data.User.Should().NotBeNull();
+        registerResult.Data.User.Username.Should().Be("testuser");
+        registerResult.Data.User.Id.Should().BeGreaterThan(0);
 
         // Act 2: Login with the registered user
         var loginRequest = GenericTestDataFactory.CreateLoginRequest();
@@ -41,7 +42,8 @@ public class AuthenticationIntegrationTests : IntegrationTestTemplate
         loginResult.Should().NotBeNull();
         loginResult!.Success.Should().BeTrue();
         loginResult.Data.Token.Should().NotBeNullOrEmpty();
-        loginResult.Data.Username.Should().Be("testuser");
+        loginResult.Data.User.Should().NotBeNull();
+        loginResult.Data.User.Username.Should().Be("testuser");
 
         // Act 3: Get current user with the token
         SetBearerToken(loginResult.Data.Token);
@@ -54,7 +56,7 @@ public class AuthenticationIntegrationTests : IntegrationTestTemplate
         currentUser.Data.User.Should().NotBeNull();
         currentUser.Data.User.Username.Should().Be("testuser");
         currentUser.Data.User.Email.Should().Be("test@example.com");
-        currentUser.Data.User.Id.Should().Be(loginResult.Data.UserId);
+        currentUser.Data.User.Id.Should().Be(loginResult.Data.User.Id);
     }
 
     [Fact]
@@ -240,7 +242,8 @@ public class AuthenticationIntegrationTests : IntegrationTestTemplate
             loginResult.Should().NotBeNull();
             loginResult!.Success.Should().BeTrue();
             loginResult.Data.Token.Should().NotBeNullOrEmpty();
-            loginResult.Data.Username.Should().Be(users[i].Username);
+            loginResult.Data.User.Should().NotBeNull();
+            loginResult.Data.User.Username.Should().Be(users[i].Username);
         }
     }
 

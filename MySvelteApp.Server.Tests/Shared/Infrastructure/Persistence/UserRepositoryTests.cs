@@ -3,6 +3,7 @@ using FluentAssertions;
 using MySvelteApp.Server.Shared.Infrastructure.Persistence;
 using MySvelteApp.Server.Shared.Infrastructure.Persistence.Repositories;
 using MySvelteApp.Server.Shared.Domain.Entities;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Shared.Infrastructure.Persistence;
@@ -19,12 +20,12 @@ public class UserRepositoryTests : TestBase
         await AddEntityAsync(user);
 
         // Act
-        var result = await Repository.GetByUsernameAsync("testuser");
+        var result = await Repository.GetByUsernameAsync(Username.Create("testuser"));
 
         // Assert
         result.Should().NotBeNull();
-        result!.Username.Should().Be("testuser");
-        result.Email.Should().Be("test@example.com");
+        result!.Username.Value.Should().Be("testuser");
+        result.Email.Value.Should().Be("test@example.com");
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public class UserRepositoryTests : TestBase
         // No users in database
 
         // Act
-        var result = await Repository.GetByUsernameAsync("nonexistentuser");
+        var result = await Repository.GetByUsernameAsync(Username.Create("nonexistentuser"));
 
         // Assert
         result.Should().BeNull();
@@ -48,12 +49,12 @@ public class UserRepositoryTests : TestBase
         await AddEntityAsync(user);
 
         // Act
-        var result1 = await Repository.GetByUsernameAsync("TestUser");
-        var result2 = await Repository.GetByUsernameAsync("testuser");
+        var result1 = await Repository.GetByUsernameAsync(Username.Create("TestUser"));
+        var result2 = await Repository.GetByUsernameAsync(Username.Create("testuser"));
 
         // Assert
         result1.Should().NotBeNull();
-        result1!.Username.Should().Be("TestUser");
+        result1!.Username.Value.Should().Be("TestUser");
         result2.Should().BeNull();
     }
 
@@ -70,8 +71,8 @@ public class UserRepositoryTests : TestBase
         // Assert
         result.Should().NotBeNull();
         result!.Id.Should().Be(user.Id);
-        result.Username.Should().Be("testuser");
-        result.Email.Should().Be("test@example.com");
+        result.Username.Value.Should().Be("testuser");
+        result.Email.Value.Should().Be("test@example.com");
     }
 
     [Fact]
@@ -95,7 +96,7 @@ public class UserRepositoryTests : TestBase
         await AddEntityAsync(user);
 
         // Act
-        var result = await Repository.UsernameExistsAsync("testuser");
+        var result = await Repository.UsernameExistsAsync(Username.Create("testuser"));
 
         // Assert
         result.Should().BeTrue();
@@ -108,7 +109,7 @@ public class UserRepositoryTests : TestBase
         // No users in database
 
         // Act
-        var result = await Repository.UsernameExistsAsync("nonexistentuser");
+        var result = await Repository.UsernameExistsAsync(Username.Create("nonexistentuser"));
 
         // Assert
         result.Should().BeFalse();
@@ -122,7 +123,7 @@ public class UserRepositoryTests : TestBase
         await AddEntityAsync(user);
 
         // Act
-        var result = await Repository.EmailExistsAsync("test@example.com");
+        var result = await Repository.EmailExistsAsync(Email.Create("test@example.com"));
 
         // Assert
         result.Should().BeTrue();
@@ -135,7 +136,7 @@ public class UserRepositoryTests : TestBase
         // No users in database
 
         // Act
-        var result = await Repository.EmailExistsAsync("nonexistent@example.com");
+        var result = await Repository.EmailExistsAsync(Email.Create("nonexistent@example.com"));
 
         // Assert
         result.Should().BeFalse();
@@ -202,8 +203,8 @@ public class UserRepositoryTests : TestBase
         await AddEntityAsync(user);
 
         // Act
-        var result1 = await Repository.UsernameExistsAsync("TestUser");
-        var result2 = await Repository.UsernameExistsAsync("testuser");
+        var result1 = await Repository.UsernameExistsAsync(Username.Create("TestUser"));
+        var result2 = await Repository.UsernameExistsAsync(Username.Create("testuser"));
 
         // Assert
         result1.Should().BeTrue();
@@ -211,21 +212,21 @@ public class UserRepositoryTests : TestBase
     }
 
     [Fact]
-    public async Task EmailExistsAsync_CaseSensitive_ReturnsFalseForDifferentCases()
+    public async Task EmailExistsAsync_CaseInsensitive_ReturnsTrueForDifferentCases()
     {
         // Arrange
         var user = GenericTestDataFactory.CreateUser(username: "testuser", email: "Test@Example.com");
         await AddEntityAsync(user);
 
-        // Act
-        var result1 = await Repository.EmailExistsAsync("Test@Example.com");
-        var result2 = await Repository.EmailExistsAsync("test@example.com");
-        var result3 = await Repository.EmailExistsAsync("TEST@EXAMPLE.COM");
+        // Act - Email.Create normalizes to lowercase
+        var result1 = await Repository.EmailExistsAsync(Email.Create("Test@Example.com"));
+        var result2 = await Repository.EmailExistsAsync(Email.Create("test@example.com"));
+        var result3 = await Repository.EmailExistsAsync(Email.Create("TEST@EXAMPLE.COM"));
 
-        // Assert - EF Core InMemory is case-sensitive for strings by default
-        result1.Should().BeTrue();  // Exact match
-        result2.Should().BeFalse(); // Different case
-        result3.Should().BeFalse(); // Different case
+        // Assert - All should match since Email normalizes to lowercase
+        result1.Should().BeTrue();
+        result2.Should().BeTrue();
+        result3.Should().BeTrue();
     }
 
     [Fact]

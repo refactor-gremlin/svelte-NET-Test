@@ -4,6 +4,7 @@ using FluentAssertions;
 using MySvelteApp.Server.Shared.Infrastructure.Authentication;
 using MySvelteApp.Server.Shared.Infrastructure.Configuration;
 using MySvelteApp.Server.Shared.Domain.Entities;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -38,8 +39,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -57,8 +58,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -69,7 +70,7 @@ public class JwtTokenGeneratorTests
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
         jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.NameIdentifier && c.Value == user.Id.ToString());
-        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Username);
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Username.Value);
         jwtToken.Claims.Should().Contain(c => c.Type == "jti" && !string.IsNullOrEmpty(c.Value));
     }
 
@@ -80,8 +81,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -108,8 +109,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -130,14 +131,14 @@ public class JwtTokenGeneratorTests
         var user1 = new User
         {
             Id = 1,
-            Username = "testuser1",
-            Email = "test1@example.com"
+            Username = Username.Create("testuser1"),
+            Email = Email.Create("test1@example.com")
         };
         var user2 = new User
         {
             Id = 2,
-            Username = "testuser2",
-            Email = "test2@example.com"
+            Username = Username.Create("testuser2"),
+            Email = Email.Create("test2@example.com")
         };
 
         // Act
@@ -155,8 +156,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -185,8 +186,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -212,8 +213,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -238,8 +239,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = username,
-            Email = "test@example.com"
+            Username = Username.Create(username),
+            Email = Email.Create("test@example.com")
         };
 
         // Act
@@ -249,7 +250,7 @@ public class JwtTokenGeneratorTests
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
 
-        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == username);
+        jwtToken.Claims.Should().Contain(c => c.Type == ClaimTypes.Name && c.Value == user.Username.Value);
     }
 
     [Fact]
@@ -259,8 +260,8 @@ public class JwtTokenGeneratorTests
         var user = new User
         {
             Id = 1,
-            Username = "testuser",
-            Email = "test@example.com"
+            Username = Username.Create("testuser"),
+            Email = Email.Create("test@example.com")
         };
         var token = _jwtTokenGenerator.GenerateToken(user);
 
