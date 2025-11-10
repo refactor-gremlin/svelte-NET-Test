@@ -8,7 +8,8 @@ ASP.NET Core API using **vertical slice architecture** - organized by feature/us
 Features/{Group}/{FeatureName}/     # Self-contained features
 ├── {FeatureName}Request.cs         # Request DTO (if needed)
 ├── {FeatureName}Response.cs       # Response DTO
-├── {FeatureName}Handler.cs         # Business logic
+├── {FeatureName}Command.cs        # Write operations (mutations)
+├── {FeatureName}Query.cs          # Read operations
 ├── {FeatureName}Validator.cs      # Validation (optional)
 ├── {FeatureName}Endpoint.cs       # API endpoint
 └── {FeatureName}Event.cs          # Domain event (optional)

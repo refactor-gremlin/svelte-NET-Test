@@ -11,7 +11,7 @@ namespace MySvelteApp.Server.Tests.Features.Auth.GetCurrentUser;
 
 public class GetCurrentUserEndpointTests : ControllerTestTemplate<GetCurrentUserEndpoint>
 {
-    private readonly Mock<GetCurrentUserHandler> _mockHandler = new();
+    private readonly Mock<GetCurrentUserQuery> _mockHandler = new();
 
     protected override GetCurrentUserEndpoint CreateController()
     {

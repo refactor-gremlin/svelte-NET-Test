@@ -8,14 +8,14 @@ using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Features.Auth.GetCurrentUser;
 
-public class GetCurrentUserHandlerTests
+public class GetCurrentUserQueryTests
 {
     private readonly Mock<IUserRepository> _mockUserRepository = new();
-    private readonly GetCurrentUserHandler _handler;
+    private readonly GetCurrentUserQuery _handler;
 
-    public GetCurrentUserHandlerTests()
+    public GetCurrentUserQueryTests()
     {
-        _handler = new GetCurrentUserHandler(_mockUserRepository.Object);
+        _handler = new GetCurrentUserQuery(_mockUserRepository.Object);
     }
 
     [Fact]
@@ -35,8 +35,8 @@ public class GetCurrentUserHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value!.User.Id.Should().Be(user.Id);
-        result.Value.User.Username.Should().Be(user.Username);
-        result.Value.User.Email.Should().Be(user.Email);
+        result.Value.User.Username.Should().Be(user.Username.Value);
+        result.Value.User.Email.Should().Be(user.Email.Value);
     }
 
     [Fact]

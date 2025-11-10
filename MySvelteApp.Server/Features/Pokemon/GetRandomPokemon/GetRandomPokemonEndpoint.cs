@@ -10,9 +10,9 @@ namespace MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
 [Route("pokemon/random")]
 public class GetRandomPokemonEndpoint : ApiControllerBase
 {
-    private readonly GetRandomPokemonHandler _handler;
+    private readonly GetRandomPokemonQuery _handler;
 
-    public GetRandomPokemonEndpoint(GetRandomPokemonHandler handler)
+    public GetRandomPokemonEndpoint(GetRandomPokemonQuery handler)
     {
         _handler = handler;
     }

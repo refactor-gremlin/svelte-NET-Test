@@ -10,8 +10,8 @@ alwaysApply: false
 
 ```csharp
 // Success
-return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse { ... });
-
+    return ApiResult<RegisterUserResponse>.Success(new RegisterUserResponse { ... });
+    
 // Errors
 return ApiResult<Response>.Conflict("Username already taken");
 return ApiResult<Response>.Unauthorized("Invalid credentials");

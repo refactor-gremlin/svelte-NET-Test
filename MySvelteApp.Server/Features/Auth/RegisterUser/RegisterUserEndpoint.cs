@@ -10,9 +10,9 @@ namespace MySvelteApp.Server.Features.Auth.RegisterUser;
 [Route("auth/register")]
 public class RegisterUserEndpoint : ApiControllerBase
 {
-    private readonly RegisterUserHandler _handler;
+    private readonly RegisterUserCommand _handler;
 
-    public RegisterUserEndpoint(RegisterUserHandler handler)
+    public RegisterUserEndpoint(RegisterUserCommand handler)
     {
         _handler = handler;
     }

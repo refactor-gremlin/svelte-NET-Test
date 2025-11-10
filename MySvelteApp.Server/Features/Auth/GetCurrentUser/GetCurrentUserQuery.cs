@@ -5,11 +5,11 @@ using MySvelteApp.Server.Shared.Common.DTOs;
 
 namespace MySvelteApp.Server.Features.Auth.GetCurrentUser;
 
-public class GetCurrentUserHandler
+public class GetCurrentUserQuery
 {
     private readonly IUserRepository _userRepository;
 
-    public GetCurrentUserHandler(IUserRepository userRepository)
+    public GetCurrentUserQuery(IUserRepository userRepository)
     {
         _userRepository = userRepository;
     }

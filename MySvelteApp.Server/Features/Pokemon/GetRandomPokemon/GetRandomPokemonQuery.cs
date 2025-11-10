@@ -4,12 +4,12 @@ using MySvelteApp.Server.Shared.Common.Results;
 
 namespace MySvelteApp.Server.Features.Pokemon.GetRandomPokemon;
 
-public class GetRandomPokemonHandler
+public class GetRandomPokemonQuery
 {
     private const string PokemonApiBaseUrl = "https://pokeapi.co/api/v2/pokemon/";
     private readonly HttpClient _httpClient;
 
-    public GetRandomPokemonHandler(HttpClient httpClient)
+    public GetRandomPokemonQuery(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }

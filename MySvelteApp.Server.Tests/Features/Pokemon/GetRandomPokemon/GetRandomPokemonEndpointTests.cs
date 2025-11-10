@@ -12,7 +12,7 @@ namespace MySvelteApp.Server.Tests.Features.Pokemon.GetRandomPokemon;
 
 public class GetRandomPokemonEndpointTests : ControllerTestTemplate<GetRandomPokemonEndpoint>
 {
-    private readonly Mock<GetRandomPokemonHandler> _mockHandler = new();
+    private readonly Mock<GetRandomPokemonQuery> _mockHandler = new();
 
     protected override GetRandomPokemonEndpoint CreateController()
     {

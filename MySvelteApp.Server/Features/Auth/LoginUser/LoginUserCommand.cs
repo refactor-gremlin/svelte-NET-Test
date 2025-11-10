@@ -6,13 +6,13 @@ using MySvelteApp.Server.Shared.Domain.ValueObjects;
 
 namespace MySvelteApp.Server.Features.Auth.LoginUser;
 
-public class LoginUserHandler
+public class LoginUserCommand
 {
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public LoginUserHandler(
+    public LoginUserCommand(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator)

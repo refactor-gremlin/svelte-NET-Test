@@ -40,16 +40,16 @@ var pokemon = GenericTestDataFactory.CreateRandomPokemonDto();
 ## Handler Testing
 
 ```csharp
-public class RegisterUserHandlerTests
+public class RegisterUserCommandTests
 {
     private readonly Mock<IUserRepository> _mockRepo = new();
     private readonly Mock<IUnitOfWork> _mockUow = new();
     private readonly Mock<IPasswordHasher> _mockHasher = new();
-    private readonly RegisterUserHandler _handler;
+    private readonly RegisterUserCommand _handler;
 
-    public RegisterUserHandlerTests()
+    public RegisterUserCommandTests()
     {
-        _handler = new RegisterUserHandler(_mockRepo.Object, _mockUow.Object, _mockHasher.Object);
+        _handler = new RegisterUserCommand(_mockRepo.Object, _mockUow.Object, _mockHasher.Object);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class RegisterUserHandlerTests
 ```csharp
 public class RegisterUserEndpointTests : ControllerTestTemplate<RegisterUserEndpoint>
 {
-    private readonly Mock<RegisterUserHandler> _mockHandler = new();
+    private readonly Mock<RegisterUserCommand> _mockHandler = new();
 
     protected override RegisterUserEndpoint CreateController()
     {
@@ -221,7 +221,7 @@ _mock.Verify(x => x.Method(), Times.Once);
 dotnet test
 
 # Specific test class
-dotnet test --filter FullyQualifiedName~RegisterUserHandlerTests
+dotnet test --filter FullyQualifiedName~RegisterUserCommandTests
 
 # With coverage
 dotnet test /p:CollectCoverage=true
@@ -235,4 +235,4 @@ dotnet test /p:CollectCoverage=true
 4. Use `GenericTestDataFactory` for test data
 5. Mock dependencies, verify behavior
 
-**Example**: See `Features/Auth/RegisterUser/RegisterUserHandlerTests.cs` and `RegisterUserEndpointTests.cs`
+**Example**: See `Features/Auth/RegisterUser/RegisterUserCommandTests.cs` and `RegisterUserEndpointTests.cs`

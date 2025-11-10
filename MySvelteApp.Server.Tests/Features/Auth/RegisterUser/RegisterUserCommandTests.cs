@@ -11,7 +11,7 @@ using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Features.Auth.RegisterUser;
 
-public class RegisterUserHandlerTests
+public class RegisterUserCommandTests
 {
     private readonly Mock<IUserDomainService> _mockUserDomainService = new();
     private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
@@ -19,11 +19,11 @@ public class RegisterUserHandlerTests
     private readonly Mock<IUserRepository> _mockUserRepository = new();
     private readonly Mock<IUnitOfWork> _mockUnitOfWork = new();
     private readonly Mock<IDomainEventPublisher> _mockEventPublisher = new();
-    private readonly RegisterUserHandler _handler;
+    private readonly RegisterUserCommand _handler;
 
-    public RegisterUserHandlerTests()
+    public RegisterUserCommandTests()
     {
-        _handler = new RegisterUserHandler(
+        _handler = new RegisterUserCommand(
             _mockUserDomainService.Object,
             _mockPasswordHasher.Object,
             _mockJwtTokenGenerator.Object,

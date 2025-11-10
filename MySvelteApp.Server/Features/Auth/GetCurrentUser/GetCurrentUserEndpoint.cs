@@ -9,9 +9,9 @@ namespace MySvelteApp.Server.Features.Auth.GetCurrentUser;
 [Route("auth/me")]
 public class GetCurrentUserEndpoint : ApiControllerBase
 {
-    private readonly GetCurrentUserHandler _handler;
+    private readonly GetCurrentUserQuery _handler;
 
-    public GetCurrentUserEndpoint(GetCurrentUserHandler handler)
+    public GetCurrentUserEndpoint(GetCurrentUserQuery handler)
     {
         _handler = handler;
     }

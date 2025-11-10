@@ -8,10 +8,11 @@ alwaysApply: false
 
 1. **Self-contained**: Everything for a feature lives in one folder
 2. **Shared code**: Only put in `Shared/` if 3+ features need it
-3. **Shared DTOs**: Always prefer shared DTOs for common entities (User, Product, etc.)
-4. **Value objects**: Use for domain concepts needing validation (Email, Username)
-5. **Domain services**: Extract complex business logic spanning multiple entities
-6. **Domain events**: Use for cross-feature communication
+3. **CQRS-lite**: Use `Command` suffix for write operations, `Query` suffix for read operations
+4. **Shared DTOs**: Always prefer shared DTOs for common entities (User, Product, etc.)
+5. **Value objects**: Use for domain concepts needing validation (Email, Username)
+6. **Domain services**: Extract complex business logic spanning multiple entities
+7. **Domain events**: Use for cross-feature communication
 
 ## Feature Structure
 
@@ -19,7 +20,8 @@ alwaysApply: false
 Features/{Group}/{FeatureName}/
 ├── {FeatureName}Request.cs
 ├── {FeatureName}Response.cs
-├── {FeatureName}Handler.cs
+├── {FeatureName}Command.cs      # Write operations (mutations)
+├── {FeatureName}Query.cs        # Read operations
 ├── {FeatureName}Validator.cs (optional)
 ├── {FeatureName}Endpoint.cs
 └── {FeatureName}Event.cs (optional)
@@ -105,10 +107,14 @@ public class UserRegisteredEventHandler : IDomainEventHandler<UserRegisteredEven
 }
 ```
 
-## Handler Pattern
+## CQRS-lite Pattern
+
+**Commands** (write operations): `{FeatureName}Command`
+**Queries** (read operations): `{FeatureName}Query`
 
 ```csharp
-public class RegisterUserHandler
+// Command example
+public class RegisterUserCommand
 {
     private readonly IUserDomainService _userDomainService;
     private readonly IUserRepository _userRepository;
@@ -142,6 +148,23 @@ public class RegisterUserHandler
         });
     }
 }
+
+// Query example
+public class GetCurrentUserQuery
+{
+    private readonly IUserRepository _userRepository;
+
+    public async Task<ApiResult<GetCurrentUserResponse>> HandleAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user == null) return ApiResult<GetCurrentUserResponse>.NotFound("User not found.");
+
+        return ApiResult<GetCurrentUserResponse>.Success(new GetCurrentUserResponse
+        {
+            User = new UserDto { Id = user.Id, Username = user.Username.Value, Email = user.Email.Value }
+        });
+    }
+}
 ```
 
 ## Endpoint Pattern
@@ -151,8 +174,10 @@ public class RegisterUserHandler
 [Route("auth/register")]
 public class RegisterUserEndpoint : ApiControllerBase
 {
-    private readonly RegisterUserHandler _handler;
-    public RegisterUserEndpoint(RegisterUserHandler handler) => _handler = handler;
+    private readonly RegisterUserCommand _handler;  // For write operations
+    // OR
+    private readonly GetCurrentUserQuery _handler;   // For read operations
+    public RegisterUserEndpoint(RegisterUserCommand handler) => _handler = handler;
 
     [HttpPost]
     public async Task<IActionResult> Handle([FromBody] RegisterUserRequest request, CancellationToken cancellationToken)
@@ -167,7 +192,8 @@ public class RegisterUserEndpoint : ApiControllerBase
 
 ```csharp
 // In ServiceCollectionExtensions
-services.AddFeatureHandlers();      // Handlers
+services.AddScoped<RegisterUserCommand>();  // Commands
+services.AddScoped<GetCurrentUserQuery>();   // Queries
 services.AddInfrastructureServices(); // Repositories, UnitOfWork
 services.AddDomainServices();        // Domain services
 services.AddDomainEvents();          // Event publisher

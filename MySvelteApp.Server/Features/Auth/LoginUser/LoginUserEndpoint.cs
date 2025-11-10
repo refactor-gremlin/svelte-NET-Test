@@ -10,9 +10,9 @@ namespace MySvelteApp.Server.Features.Auth.LoginUser;
 [Route("auth/login")]
 public class LoginUserEndpoint : ApiControllerBase
 {
-    private readonly LoginUserHandler _handler;
+    private readonly LoginUserCommand _handler;
 
-    public LoginUserEndpoint(LoginUserHandler handler)
+    public LoginUserEndpoint(LoginUserCommand handler)
     {
         _handler = handler;
     }

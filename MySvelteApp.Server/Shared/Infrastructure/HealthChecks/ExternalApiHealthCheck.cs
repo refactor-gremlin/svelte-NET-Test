@@ -5,9 +5,9 @@ namespace MySvelteApp.Server.Shared.Infrastructure.HealthChecks;
 
 public class ExternalApiHealthCheck : IHealthCheck
 {
-    private readonly GetRandomPokemonHandler _pokemonHandler;
+    private readonly GetRandomPokemonQuery _pokemonHandler;
 
-    public ExternalApiHealthCheck(GetRandomPokemonHandler pokemonHandler)
+    public ExternalApiHealthCheck(GetRandomPokemonQuery pokemonHandler)
     {
         _pokemonHandler = pokemonHandler;
     }

@@ -8,7 +8,7 @@ using MySvelteApp.Server.Shared.Domain.ValueObjects;
 
 namespace MySvelteApp.Server.Features.Auth.RegisterUser;
 
-public class RegisterUserHandler
+public class RegisterUserCommand
 {
     private readonly IUserDomainService _userDomainService;
     private readonly IPasswordHasher _passwordHasher;
@@ -17,7 +17,7 @@ public class RegisterUserHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDomainEventPublisher _eventPublisher;
 
-    public RegisterUserHandler(
+    public RegisterUserCommand(
         IUserDomainService userDomainService,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,

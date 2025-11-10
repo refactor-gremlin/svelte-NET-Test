@@ -8,8 +8,9 @@ Copy-paste templates for creating new features. Replace `{Group}` and `{FeatureN
 Features/{Group}/{FeatureName}/
 ├── {FeatureName}Request.cs      # If needed
 ├── {FeatureName}Response.cs
-├── {FeatureName}Handler.cs
-├── {FeatureName}Validator.cs     # Optional
+├── {FeatureName}Command.cs      # Write operations (mutations)
+├── {FeatureName}Query.cs        # Read operations
+├── {FeatureName}Validator.cs   # Optional
 └── {FeatureName}Endpoint.cs
 ```
 
@@ -50,7 +51,115 @@ public class {FeatureName}Response
 }
 ```
 
-## Handler
+## Command (Write Operations)
+
+```csharp
+using MySvelteApp.Server.Features.{Group}.{FeatureName};
+using MySvelteApp.Server.Shared.Common.Interfaces;
+using MySvelteApp.Server.Shared.Common.Results;
+using MySvelteApp.Server.Shared.Domain.Events;
+using MySvelteApp.Server.Shared.Domain.Services;
+using MySvelteApp.Server.Shared.Domain.ValueObjects;
+
+namespace MySvelteApp.Server.Features.{Group}.{FeatureName};
+
+public class {FeatureName}Command
+{
+    private readonly I{Feature}Repository _repository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly I{Feature}DomainService _domainService;  // Optional: if using domain service
+    private readonly IDomainEventPublisher _eventPublisher;    // Optional: if publishing events
+
+    public {FeatureName}Command(
+        I{Feature}Repository repository, 
+        IUnitOfWork unitOfWork,
+        I{Feature}DomainService? domainService = null,
+        IDomainEventPublisher? eventPublisher = null)
+    {
+        _repository = repository;
+        _unitOfWork = unitOfWork;
+        _domainService = domainService;
+        _eventPublisher = eventPublisher;
+    }
+
+    public async Task<ApiResult<{FeatureName}Response>> HandleAsync(
+        {FeatureName}Request request,
+        CancellationToken cancellationToken = default)
+    {
+        // Example: Using value objects
+        // var email = Email.Create(request.Email);
+        // var username = Username.Create(request.Username);
+
+        // Example: Using domain service
+        // var (canProceed, errorMessage) = await _domainService
+        //     .CanPerformActionAsync(...);
+        // if (!canProceed)
+        // {
+        //     return ApiResult<{FeatureName}Response>.Conflict(errorMessage!);
+        // }
+
+        // Business logic
+        var entity = new {Feature} { Property = request.Property };
+        
+        await _repository.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Example: Publishing domain event
+        // if (_eventPublisher != null)
+        // {
+        //     await _eventPublisher.PublishAsync(
+        //         new {FeatureName}CreatedEvent(entity.Id),
+        //         cancellationToken);
+        // }
+
+        return ApiResult<{FeatureName}Response>.Success(new {FeatureName}Response
+        {
+            Id = entity.Id,
+            Property = entity.Property
+        });
+    }
+}
+```
+
+## Query (Read Operations)
+
+```csharp
+using MySvelteApp.Server.Features.{Group}.{FeatureName};
+using MySvelteApp.Server.Shared.Common.Interfaces;
+using MySvelteApp.Server.Shared.Common.Results;
+
+namespace MySvelteApp.Server.Features.{Group}.{FeatureName};
+
+public class {FeatureName}Query
+{
+    private readonly I{Feature}Repository _repository;
+
+    public {FeatureName}Query(I{Feature}Repository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<ApiResult<{FeatureName}Response>> HandleAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
+        
+        if (entity == null)
+        {
+            return ApiResult<{FeatureName}Response>.NotFound("Entity not found.");
+        }
+
+        return ApiResult<{FeatureName}Response>.Success(new {FeatureName}Response
+        {
+            Id = entity.Id,
+            Property = entity.Property
+        });
+    }
+}
+```
+
+## Handler (Deprecated - Use Command/Query)
 
 ```csharp
 using MySvelteApp.Server.Features.{Group}.{FeatureName};
@@ -154,9 +263,13 @@ namespace MySvelteApp.Server.Features.{Group}.{FeatureName};
 [Route("{group}/{feature-name}")]  // e.g., [Route("products")]
 public class {FeatureName}Endpoint : ApiControllerBase
 {
-    private readonly {FeatureName}Handler _handler;
+    private readonly {FeatureName}Command _handler;  // For write operations
+    // OR
+    private readonly {FeatureName}Query _handler;     // For read operations
 
-    public {FeatureName}Endpoint({FeatureName}Handler handler)
+    public {FeatureName}Endpoint({FeatureName}Command handler)  // For write operations
+    // OR
+    public {FeatureName}Endpoint({FeatureName}Query handler)     // For read operations
     {
         _handler = handler;
     }
@@ -183,8 +296,9 @@ Add to `Shared/Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs
 public static IServiceCollection AddFeatureHandlers(this IServiceCollection services)
 {
     // ... existing handlers ...
-    services.AddScoped<{FeatureName}Handler>();
-    // For HttpClient: services.AddHttpClient<{FeatureName}Handler>();
+    services.AddScoped<{FeatureName}Command>();  // For write operations
+    services.AddScoped<{FeatureName}Query>();    // For read operations
+    // For HttpClient: services.AddHttpClient<{FeatureName}Query>();
     return services;
 }
 ```
@@ -228,7 +342,7 @@ public class RegisterUserResponse
 }
 ```
 
-### CreateProductHandler.cs
+### CreateProductCommand.cs
 ```csharp
 using MySvelteApp.Server.Features.Products.CreateProduct;
 using MySvelteApp.Server.Shared.Common.Interfaces;
@@ -236,12 +350,12 @@ using MySvelteApp.Server.Shared.Common.Results;
 
 namespace MySvelteApp.Server.Features.Products.CreateProduct;
 
-public class CreateProductHandler
+public class CreateProductCommand
 {
     private readonly IProductRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public CreateProductHandler(IProductRepository repository, IUnitOfWork unitOfWork)
+    public CreateProductCommand(IProductRepository repository, IUnitOfWork unitOfWork)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
@@ -295,9 +409,9 @@ namespace MySvelteApp.Server.Features.Products.CreateProduct;
 [Route("products")]
 public class CreateProductEndpoint : ApiControllerBase
 {
-    private readonly CreateProductHandler _handler;
+    private readonly CreateProductCommand _handler;
 
-    public CreateProductEndpoint(CreateProductHandler handler)
+    public CreateProductEndpoint(CreateProductCommand handler)
     {
         _handler = handler;
     }
@@ -317,7 +431,7 @@ public class CreateProductEndpoint : ApiControllerBase
 
 ### Registration
 ```csharp
-services.AddScoped<CreateProductHandler>();
+services.AddScoped<CreateProductCommand>();
 ```
 
 ## Using Value Objects

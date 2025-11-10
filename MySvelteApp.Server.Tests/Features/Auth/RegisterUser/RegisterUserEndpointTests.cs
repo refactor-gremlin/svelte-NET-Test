@@ -11,7 +11,7 @@ namespace MySvelteApp.Server.Tests.Features.Auth.RegisterUser;
 
 public class RegisterUserEndpointTests : ControllerTestTemplate<RegisterUserEndpoint>
 {
-    private readonly Mock<RegisterUserHandler> _mockHandler = new();
+    private readonly Mock<RegisterUserCommand> _mockHandler = new();
 
     protected override RegisterUserEndpoint CreateController()
     {

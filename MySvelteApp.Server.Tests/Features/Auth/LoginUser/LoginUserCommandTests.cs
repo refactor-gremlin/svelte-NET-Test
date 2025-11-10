@@ -9,16 +9,16 @@ using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Features.Auth.LoginUser;
 
-public class LoginUserHandlerTests
+public class LoginUserCommandTests
 {
     private readonly Mock<IUserRepository> _mockUserRepository = new();
     private readonly Mock<IPasswordHasher> _mockPasswordHasher = new();
     private readonly Mock<IJwtTokenGenerator> _mockJwtTokenGenerator = new();
-    private readonly LoginUserHandler _handler;
+    private readonly LoginUserCommand _handler;
 
-    public LoginUserHandlerTests()
+    public LoginUserCommandTests()
     {
-        _handler = new LoginUserHandler(
+        _handler = new LoginUserCommand(
             _mockUserRepository.Object,
             _mockPasswordHasher.Object,
             _mockJwtTokenGenerator.Object);

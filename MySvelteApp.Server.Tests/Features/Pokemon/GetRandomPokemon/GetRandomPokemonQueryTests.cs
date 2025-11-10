@@ -9,17 +9,17 @@ using MySvelteApp.Server.Tests.TestFixtures;
 
 namespace MySvelteApp.Server.Tests.Features.Pokemon.GetRandomPokemon;
 
-public class GetRandomPokemonHandlerTests : TestBase
+public class GetRandomPokemonQueryTests : TestBase
 {
     private readonly Mock<HttpMessageHandler> _mockHttpMessageHandler;
     private readonly HttpClient _httpClient;
-    private readonly GetRandomPokemonHandler _handler;
+    private readonly GetRandomPokemonQuery _handler;
 
-    public GetRandomPokemonHandlerTests()
+    public GetRandomPokemonQueryTests()
     {
         _mockHttpMessageHandler = new Mock<HttpMessageHandler>();
         _httpClient = new HttpClient(_mockHttpMessageHandler.Object);
-        _handler = new GetRandomPokemonHandler(_httpClient);
+        _handler = new GetRandomPokemonQuery(_httpClient);
     }
 
     [Fact]

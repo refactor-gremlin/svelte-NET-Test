@@ -30,12 +30,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddFeatureHandlers(this IServiceCollection services)
     {
         // Auth features
-        services.AddScoped<RegisterUserHandler>();
-        services.AddScoped<LoginUserHandler>();
-        services.AddScoped<GetCurrentUserHandler>();
+        services.AddScoped<RegisterUserCommand>();
+        services.AddScoped<LoginUserCommand>();
+        services.AddScoped<GetCurrentUserQuery>();
         
         // Pokemon features
-        services.AddHttpClient<GetRandomPokemonHandler>();
+        services.AddHttpClient<GetRandomPokemonQuery>();
         
         return services;
     }

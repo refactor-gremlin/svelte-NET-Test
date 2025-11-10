@@ -11,7 +11,7 @@ namespace MySvelteApp.Server.Tests.Features.Auth.LoginUser;
 
 public class LoginUserEndpointTests : ControllerTestTemplate<LoginUserEndpoint>
 {
-    private readonly Mock<LoginUserHandler> _mockHandler = new();
+    private readonly Mock<LoginUserCommand> _mockHandler = new();
 
     protected override LoginUserEndpoint CreateController()
     {
